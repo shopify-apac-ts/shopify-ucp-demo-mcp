@@ -12,6 +12,7 @@ dist/
 build/
 *.log
 npm-debug.log*
+package-lock.json
 
 # OS
 .DS_Store

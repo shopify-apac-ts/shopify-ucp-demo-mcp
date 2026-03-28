@@ -1,6 +1,32 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { searchGlobalProducts, getGlobalProductDetails } from './catalog.js';
+
+// Slim down a raw Catalog MCP product into essential fields only.
+// Keeps the cheapest offer per product to minimise response size.
+function formatProduct(p: Record<string, unknown>, index: number): string {
+  const offers = (p.offers as Record<string, unknown>[] | undefined) ?? [];
+  const offer = offers[0] ?? {};
+  const shop = (offer.shop as Record<string, unknown> | undefined) ?? {};
+  const images = (p.images as Record<string, unknown>[] | undefined) ?? [];
+  const image = images[0] ? `\n   Image: ${images[0].url}` : '';
+  const productUrl = offer.onlineStoreUrl ? `\n   Product page: ${offer.onlineStoreUrl}` : '';
+  const checkoutUrl = offer.checkoutUrl ? `\n   **Checkout: ${offer.checkoutUrl}**` : '';
+  const price = offer.price != null ? `${offer.price} ${offer.currency ?? ''}` : 'N/A';
+  const desc = typeof p.description === 'string'
+    ? p.description.slice(0, 120) + (p.description.length > 120 ? '…' : '')
+    : '';
+
+  return [
+    `${index + 1}. **${p.title}** — ${price}`,
+    `   Shop: ${shop.name ?? shop.domain ?? 'Unknown'}`,
+    desc ? `   ${desc}` : '',
+    `   UPID: ${p.upid}`,
+    image,
+    productUrl,
+    checkoutUrl,
+  ].filter(Boolean).join('\n');
+}
 import {
   createCheckout,
   updateCheckout,
@@ -37,17 +63,16 @@ export function createMcpServer(): McpServer {
         ...(country && { location: { country, ...(zip && { zip }) } }),
         ...(price_min !== undefined && { price_min }),
         ...(price_max !== undefined && { price_max }),
-        ...(limit !== undefined && { limit }),
+        limit: limit ?? 5,
       });
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      const products = (result?.products ?? result ?? []) as Record<string, unknown>[];
+      const lines = products.map((p, i) => formatProduct(p, i));
+      const text = lines.length > 0
+        ? `Found ${lines.length} product(s):\n\n${lines.join('\n\n')}`
+        : 'No products found for this query.';
+
+      return { content: [{ type: 'text', text }] };
     }
   );
 

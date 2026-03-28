@@ -55,7 +55,7 @@ export interface SearchProductsParams {
 }
 
 export async function searchGlobalProducts(params: SearchProductsParams) {
-  return callCatalogMcp('search_global_products', params as Record<string, unknown>);
+  return callCatalogMcp('search_global_products', params as unknown as Record<string, unknown>);
 }
 
 export interface GetProductDetailsParams {
@@ -65,5 +65,5 @@ export interface GetProductDetailsParams {
 }
 
 export async function getGlobalProductDetails(params: GetProductDetailsParams) {
-  return callCatalogMcp('get_global_product_details', params as Record<string, unknown>);
+  return callCatalogMcp('get_global_product_details', params as unknown as Record<string, unknown>);
 }

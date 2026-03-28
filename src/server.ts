@@ -78,8 +78,18 @@ export function createMcpServer(): McpServer {
       const raw = result as Record<string, unknown>;
       const products = (Array.isArray(raw?.offers) ? raw.offers : []) as Record<string, unknown>[];
       if (products.length > 0) {
-        console.error('[search_products] first offer keys:', Object.keys(products[0]));
-        console.error('[search_products] first offer sample:', JSON.stringify(products[0]).slice(0, 800));
+        const first = products[0] as Record<string, unknown>;
+        const variants = first.variants as unknown[];
+        console.error('[search_products] first offer keys:', Object.keys(first));
+        if (Array.isArray(variants) && variants.length > 0) {
+          console.error('[search_products] first variant sample:', JSON.stringify(variants[0]).slice(0, 800));
+        }
+        const priceRange = first.priceRange;
+        console.error('[search_products] priceRange:', JSON.stringify(priceRange));
+        const media = first.media as unknown[];
+        if (Array.isArray(media) && media.length > 0) {
+          console.error('[search_products] first media:', JSON.stringify(media[0]));
+        }
       }
 
       const lines = products.map((p, i) => formatProduct(p, i));

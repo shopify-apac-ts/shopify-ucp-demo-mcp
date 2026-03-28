@@ -66,11 +66,23 @@ export function createMcpServer(): McpServer {
         limit: limit ?? 5,
       });
 
-      const products = (result?.products ?? result ?? []) as Record<string, unknown>[];
+      // Log structure to understand the Catalog MCP response shape
+      console.error('[search_products] result keys:', Object.keys(result ?? {}));
+      console.error('[search_products] result sample:', JSON.stringify(result).slice(0, 500));
+
+      const raw = result as Record<string, unknown>;
+      const products = (
+        Array.isArray(raw) ? raw
+        : Array.isArray(raw?.products) ? raw.products
+        : Array.isArray(raw?.results) ? raw.results
+        : Array.isArray(raw?.data) ? raw.data
+        : []
+      ) as Record<string, unknown>[];
+
       const lines = products.map((p, i) => formatProduct(p, i));
       const text = lines.length > 0
         ? `Found ${lines.length} product(s):\n\n${lines.join('\n\n')}`
-        : 'No products found for this query.';
+        : `No products found. Raw response keys: ${Object.keys(raw).join(', ')}`;
 
       return { content: [{ type: 'text', text }] };
     }

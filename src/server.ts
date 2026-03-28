@@ -5,26 +5,35 @@ import { searchGlobalProducts, getGlobalProductDetails } from './catalog.js';
 // Slim down a raw Catalog MCP product into essential fields only.
 // Keeps the cheapest offer per product to minimise response size.
 function formatProduct(p: Record<string, unknown>, index: number): string {
-  const offers = (p.offers as Record<string, unknown>[] | undefined) ?? [];
-  const offer = offers[0] ?? {};
-  const shop = (offer.shop as Record<string, unknown> | undefined) ?? {};
+  // Each element in `offers` represents a product+shop combination.
+  // Nested offers (multiple shops for same product) live in p.offers.
+  const nestedOffers = (p.offers as Record<string, unknown>[] | undefined) ?? [];
+  const firstOffer = nestedOffers[0] ?? p; // fall back to top-level if no nested offers
+  const shop = (firstOffer.shop as Record<string, unknown> | undefined)
+    ?? (p.shop as Record<string, unknown> | undefined)
+    ?? {};
+
   const images = (p.images as Record<string, unknown>[] | undefined) ?? [];
   const image = images[0] ? `\n   Image: ${images[0].url}` : '';
-  const productUrl = offer.onlineStoreUrl ? `\n   Product page: ${offer.onlineStoreUrl}` : '';
-  const checkoutUrl = offer.checkoutUrl ? `\n   **Checkout: ${offer.checkoutUrl}**` : '';
-  const price = offer.price != null ? `${offer.price} ${offer.currency ?? ''}` : 'N/A';
+
+  const productUrl = (firstOffer.onlineStoreUrl ?? p.onlineStoreUrl);
+  const checkoutUrl = (firstOffer.checkoutUrl ?? p.checkoutUrl);
+  const price = firstOffer.price ?? p.price;
+  const currency = firstOffer.currency ?? p.currency ?? '';
+
+  const priceStr = price != null ? `${price} ${currency}`.trim() : 'N/A';
   const desc = typeof p.description === 'string'
     ? p.description.slice(0, 120) + (p.description.length > 120 ? '…' : '')
     : '';
 
   return [
-    `${index + 1}. **${p.title}** — ${price}`,
+    `${index + 1}. **${p.title}** — ${priceStr}`,
     `   Shop: ${shop.name ?? shop.domain ?? 'Unknown'}`,
     desc ? `   ${desc}` : '',
-    `   UPID: ${p.upid}`,
+    `   UPID: ${p.upid ?? 'N/A'}`,
     image,
-    productUrl,
-    checkoutUrl,
+    productUrl ? `\n   Product page: ${productUrl}` : '',
+    checkoutUrl ? `\n   **Checkout: ${checkoutUrl}**` : '',
   ].filter(Boolean).join('\n');
 }
 import {
@@ -66,23 +75,13 @@ export function createMcpServer(): McpServer {
         limit: limit ?? 5,
       });
 
-      // Log structure to understand the Catalog MCP response shape
-      console.error('[search_products] result keys:', Object.keys(result ?? {}));
-      console.error('[search_products] result sample:', JSON.stringify(result).slice(0, 500));
-
       const raw = result as Record<string, unknown>;
-      const products = (
-        Array.isArray(raw) ? raw
-        : Array.isArray(raw?.products) ? raw.products
-        : Array.isArray(raw?.results) ? raw.results
-        : Array.isArray(raw?.data) ? raw.data
-        : []
-      ) as Record<string, unknown>[];
+      const products = (Array.isArray(raw?.offers) ? raw.offers : []) as Record<string, unknown>[];
 
       const lines = products.map((p, i) => formatProduct(p, i));
       const text = lines.length > 0
         ? `Found ${lines.length} product(s):\n\n${lines.join('\n\n')}`
-        : `No products found. Raw response keys: ${Object.keys(raw).join(', ')}`;
+        : 'No products found for this query.';
 
       return { content: [{ type: 'text', text }] };
     }

@@ -5,35 +5,26 @@ import { searchGlobalProducts, getGlobalProductDetails } from './catalog.js';
 // Slim down a raw Catalog MCP product into essential fields only.
 // Keeps the cheapest offer per product to minimise response size.
 function formatProduct(p: Record<string, unknown>, index: number): string {
-  // Each element in `offers` represents a product+shop combination.
-  // Nested offers (multiple shops for same product) live in p.offers.
-  const nestedOffers = (p.offers as Record<string, unknown>[] | undefined) ?? [];
-  const firstOffer = nestedOffers[0] ?? p; // fall back to top-level if no nested offers
-  const shop = (firstOffer.shop as Record<string, unknown> | undefined)
-    ?? (p.shop as Record<string, unknown> | undefined)
-    ?? {};
-
-  const images = (p.images as Record<string, unknown>[] | undefined) ?? [];
-  const image = images[0] ? `\n   Image: ${images[0].url}` : '';
-
-  const productUrl = (firstOffer.onlineStoreUrl ?? p.onlineStoreUrl);
-  const checkoutUrl = (firstOffer.checkoutUrl ?? p.checkoutUrl);
-  const price = firstOffer.price ?? p.price;
-  const currency = firstOffer.currency ?? p.currency ?? '';
-
-  const priceStr = price != null ? `${price} ${currency}`.trim() : 'N/A';
+  const variants = (p.variants as Record<string, unknown>[] | undefined) ?? [];
+  const firstVariant = variants[0] ?? {};
+  const shop = (firstVariant.shop as Record<string, unknown> | undefined) ?? {};
+  const priceRange = p.priceRange as Record<string, Record<string, unknown>> | undefined;
+  const minPrice = priceRange?.min;
+  const priceStr = minPrice ? `${minPrice.amount} ${minPrice.currency}` : 'N/A';
+  const media = (p.media as Record<string, unknown>[] | undefined) ?? [];
+  const imageUrl = media[0]?.url as string | undefined;
   const desc = typeof p.description === 'string'
     ? p.description.slice(0, 120) + (p.description.length > 120 ? '…' : '')
     : '';
 
   return [
     `${index + 1}. **${p.title}** — ${priceStr}`,
-    `   Shop: ${shop.name ?? shop.domain ?? 'Unknown'}`,
+    `   Shop: ${shop.name ?? 'Unknown'}`,
     desc ? `   ${desc}` : '',
-    `   UPID: ${p.upid ?? 'N/A'}`,
-    image,
-    productUrl ? `\n   Product page: ${productUrl}` : '',
-    checkoutUrl ? `\n   **Checkout: ${checkoutUrl}**` : '',
+    `   ID: ${p.id ?? 'N/A'}`,
+    imageUrl ? `   Image: ${imageUrl}` : '',
+    firstVariant.variantUrl ? `   Product page: ${firstVariant.variantUrl}` : '',
+    firstVariant.checkoutUrl ? `   **Checkout: ${firstVariant.checkoutUrl}**` : '',
   ].filter(Boolean).join('\n');
 }
 import {
@@ -77,20 +68,6 @@ export function createMcpServer(): McpServer {
 
       const raw = result as Record<string, unknown>;
       const products = (Array.isArray(raw?.offers) ? raw.offers : []) as Record<string, unknown>[];
-      if (products.length > 0) {
-        const first = products[0] as Record<string, unknown>;
-        const variants = first.variants as unknown[];
-        console.error('[search_products] first offer keys:', Object.keys(first));
-        if (Array.isArray(variants) && variants.length > 0) {
-          console.error('[search_products] first variant sample:', JSON.stringify(variants[0]).slice(0, 800));
-        }
-        const priceRange = first.priceRange;
-        console.error('[search_products] priceRange:', JSON.stringify(priceRange));
-        const media = first.media as unknown[];
-        if (Array.isArray(media) && media.length > 0) {
-          console.error('[search_products] first media:', JSON.stringify(media[0]));
-        }
-      }
 
       const lines = products.map((p, i) => formatProduct(p, i));
       const text = lines.length > 0

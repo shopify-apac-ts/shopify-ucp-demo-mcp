@@ -24,9 +24,9 @@ function formatSearchProduct(p: Record<string, unknown>, index: number): string 
   const priceRange = p.priceRange as Record<string, Record<string, unknown>> | undefined;
 
   const priceStr = variantPrice
-    ? `${variantPrice.amount} ${variantPrice.currencyCode ?? ''}`
+    ? `${variantPrice.amount} ${variantPrice.currencyCode ?? ''}`.trim()
     : priceRange?.min
-    ? `${priceRange.min.amount} ${priceRange.min.currencyCode ?? ''}`
+    ? `${priceRange.min.amount} ${priceRange.min.currencyCode ?? ''}`.trim()
     : 'N/A';
 
   const images = (p.images as Record<string, unknown>[] | undefined) ?? [];
@@ -38,12 +38,17 @@ function formatSearchProduct(p: Record<string, unknown>, index: number): string 
 
   const shopUrl = shop.onlineStoreUrl as string | undefined;
   const checkoutUrl = firstOffer.checkoutUrl as string | undefined;
+  const shopName = shop.name as string | undefined;
+
+  // Extract Base62 UPID for use with get_product_details
+  const rawId = p.id as string | undefined;
+  const base62 = rawId?.match(/\/p\/([^/?#]+)/)?.[1] ?? rawId ?? 'N/A';
 
   return [
     `${index + 1}. **${p.title}** — ${priceStr}`,
-    `   Shop: ${shop.name ?? 'Unknown'}${shopUrl ? ` (${shopUrl})` : ''}`,
+    shopName ? `   Shop: ${shopName}${shopUrl ? ` (${shopUrl})` : ''}` : '',
     desc ? `   ${desc}` : '',
-    `   ID: ${p.id ?? 'N/A'}`,
+    `   ID: ${base62}`,
     imageUrl ? `   Image: ${imageUrl}` : '',
     checkoutUrl ? `   **Checkout: ${checkoutUrl}**` : '',
   ].filter(Boolean).join('\n');

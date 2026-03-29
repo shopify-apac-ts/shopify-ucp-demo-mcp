@@ -27,6 +27,10 @@ async function parseResponse(response: Response): Promise<unknown> {
     return JSON.parse(dataLines[dataLines.length - 1]);
   }
 
+  if (!text || !text.trimStart().startsWith('{') && !text.trimStart().startsWith('[')) {
+    throw new Error(`Non-JSON response from Catalog MCP: ${text.slice(0, 200)}`);
+  }
+
   return JSON.parse(text);
 }
 
@@ -142,9 +146,15 @@ export interface GetProductDetailsParams {
   limit?: number;
 }
 
+// Extract Base62 ID from full GID (e.g. "gid://shopify/p/AbC123" → "AbC123")
+function extractBase62(upid: string): string {
+  const match = upid.match(/\/p\/([^/?#]+)/);
+  return match ? match[1] : upid;
+}
+
 export async function getGlobalProductDetails(params: GetProductDetailsParams) {
   const args: Record<string, unknown> = {
-    upid: params.upid,
+    upid: extractBase62(params.upid),
     ...(params.product_options && { product_options: params.product_options }),
     ...(params.ships_to && { ships_to: params.ships_to }),
     ...(params.limit !== undefined && { limit: params.limit }),

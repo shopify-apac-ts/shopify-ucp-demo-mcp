@@ -16,7 +16,6 @@ async function parseResponse(response: Response): Promise<unknown> {
   const text = await response.text();
 
   if (contentType.includes('text/event-stream')) {
-    // Extract the last "data: ..." line from the SSE stream
     const dataLines = text
       .split('\n')
       .filter((l) => l.startsWith('data: '))
@@ -64,7 +63,6 @@ async function initSession(token: string): Promise<string | null> {
 
 async function callCatalogMcp(toolName: string, args: Record<string, unknown>) {
   const token = await getBearerToken();
-
   const sessionId = await initSession(token);
 
   const body = {
@@ -117,27 +115,39 @@ async function callCatalogMcp(toolName: string, args: Record<string, unknown>) {
 export interface SearchProductsParams {
   query: string;
   context: string;
-  location?: { country: string; zip?: string };
-  price_min?: number;
-  price_max?: number;
+  ships_to?: string;     // ISO 2-letter country code
+  min_price?: number;
+  max_price?: number;
   limit?: number;
 }
 
 export async function searchGlobalProducts(params: SearchProductsParams) {
-  const catalogId = process.env.SHOPIFY_CATALOG_ID;
-  const args = {
-    ...params,
-    ...(catalogId && { catalog_id: catalogId }),
+  const savedCatalog = process.env.SHOPIFY_CATALOG_ID;
+  const args: Record<string, unknown> = {
+    query: params.query,
+    context: params.context,
+    ...(params.ships_to && { ships_to: params.ships_to }),
+    ...(params.min_price !== undefined && { min_price: params.min_price }),
+    ...(params.max_price !== undefined && { max_price: params.max_price }),
+    ...(params.limit !== undefined && { limit: params.limit }),
+    ...(savedCatalog && { saved_catalog: savedCatalog }),
   };
-  return callCatalogMcp('search_global_products', args as unknown as Record<string, unknown>);
+  return callCatalogMcp('search_global_products', args);
 }
 
 export interface GetProductDetailsParams {
   upid: string;
-  options_preferences?: Record<string, string>;
-  shop_domains?: string[];
+  product_options?: Array<{ key: string; values: string[] }>;
+  ships_to?: string;
+  limit?: number;
 }
 
 export async function getGlobalProductDetails(params: GetProductDetailsParams) {
-  return callCatalogMcp('get_global_product_details', params as unknown as Record<string, unknown>);
+  const args: Record<string, unknown> = {
+    upid: params.upid,
+    ...(params.product_options && { product_options: params.product_options }),
+    ...(params.ships_to && { ships_to: params.ships_to }),
+    ...(params.limit !== undefined && { limit: params.limit }),
+  };
+  return callCatalogMcp('get_global_product_details', args);
 }

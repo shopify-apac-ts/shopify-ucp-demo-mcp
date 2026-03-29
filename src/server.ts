@@ -1,38 +1,53 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { searchGlobalProducts, getGlobalProductDetails } from './catalog.js';
-
-// Slim down a raw Catalog MCP product into essential fields only.
-// Keeps the cheapest offer per product to minimise response size.
-function formatProduct(p: Record<string, unknown>, index: number): string {
-  const variants = (p.variants as Record<string, unknown>[] | undefined) ?? [];
-  const firstVariant = variants[0] ?? {};
-  const shop = (firstVariant.shop as Record<string, unknown> | undefined) ?? {};
-  const priceRange = p.priceRange as Record<string, Record<string, unknown>> | undefined;
-  const minPrice = priceRange?.min;
-  const priceStr = minPrice ? `${minPrice.amount} ${minPrice.currency}` : 'N/A';
-  const media = (p.media as Record<string, unknown>[] | undefined) ?? [];
-  const imageUrl = media[0]?.url as string | undefined;
-  const desc = typeof p.description === 'string'
-    ? p.description.slice(0, 120) + (p.description.length > 120 ? '…' : '')
-    : '';
-
-  return [
-    `${index + 1}. **${p.title}** — ${priceStr}`,
-    `   Shop: ${shop.name ?? 'Unknown'}`,
-    desc ? `   ${desc}` : '',
-    `   ID: ${p.id ?? 'N/A'}`,
-    imageUrl ? `   Image: ${imageUrl}` : '',
-    firstVariant.variantUrl ? `   Product page: ${firstVariant.variantUrl}` : '',
-    firstVariant.checkoutUrl ? `   **Checkout: ${firstVariant.checkoutUrl}**` : '',
-  ].filter(Boolean).join('\n');
-}
 import {
   createCheckout,
   updateCheckout,
   completeCheckout,
   cancelCheckout,
 } from './checkout.js';
+
+// Response structure from Catalog MCP search_global_products:
+// result.offers[] = universal products
+//   .id, .title, .description, .images[].url
+//   .priceRange.min.{ amount, currencyCode }
+//   .products[] = per-shop offers
+//     .checkoutUrl, .price.{ amount, currencyCode }
+//     .shop.{ name, onlineStoreUrl }
+//     .selectedProductVariant.{ id }
+function formatSearchProduct(p: Record<string, unknown>, index: number): string {
+  const perShopOffers = (p.products as Record<string, unknown>[] | undefined) ?? [];
+  const firstOffer = perShopOffers[0] ?? {};
+  const shop = (firstOffer.shop as Record<string, unknown> | undefined) ?? {};
+  const variantPrice = firstOffer.price as Record<string, unknown> | undefined;
+  const priceRange = p.priceRange as Record<string, Record<string, unknown>> | undefined;
+
+  const priceStr = variantPrice
+    ? `${variantPrice.amount} ${variantPrice.currencyCode ?? ''}`
+    : priceRange?.min
+    ? `${priceRange.min.amount} ${priceRange.min.currencyCode ?? ''}`
+    : 'N/A';
+
+  const images = (p.images as Record<string, unknown>[] | undefined) ?? [];
+  const imageUrl = images[0]?.url as string | undefined;
+
+  const desc = typeof p.description === 'string'
+    ? p.description.slice(0, 120) + (p.description.length > 120 ? '…' : '')
+    : '';
+
+  const shopUrl = shop.onlineStoreUrl as string | undefined;
+  const checkoutUrl = firstOffer.checkoutUrl as string | undefined;
+
+  return [
+    `${index + 1}. **${p.title}** — ${priceStr}`,
+    `   Shop: ${shop.name ?? 'Unknown'}${shopUrl ? ` (${shopUrl})` : ''}`,
+    desc ? `   ${desc}` : '',
+    `   ID: ${p.id ?? 'N/A'}`,
+    imageUrl ? `   Image: ${imageUrl}` : '',
+    checkoutUrl ? `   **Checkout: ${checkoutUrl}**` : '',
+  ].filter(Boolean).join('\n');
+}
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -42,34 +57,32 @@ export function createMcpServer(): McpServer {
 
   // ----------------------------------------------------------------
   // Tool: search_products
-  // Searches products globally across all Shopify merchants
   // ----------------------------------------------------------------
   server.tool(
     'search_products',
     'Search for products across all Shopify merchants worldwide. Returns product list with titles, prices, images, and checkout URLs.',
     {
       query: z.string().describe('Search query, e.g. "red sneakers" or "organic coffee beans"'),
-      context: z.string().optional().describe("Additional context about the buyer's needs, preferences, demographics, or situation. When omitted, the query is used as context."),
-      country: z.string().optional().describe('2-letter ISO country code for shipping location, e.g. "US", "JP"'),
-      zip: z.string().optional().describe('Postal/ZIP code for shipping location'),
-      price_min: z.number().optional().describe('Minimum price in the store currency'),
-      price_max: z.number().optional().describe('Maximum price in the store currency'),
-      limit: z.number().optional().describe('Maximum number of results to return (default: 10)'),
+      context: z.string().optional().describe("Additional context about the buyer's needs, preferences, or situation. When omitted, the query is used as context."),
+      ships_to: z.string().optional().describe('2-letter ISO country code to filter products that ship to this country, e.g. "JP", "US"'),
+      price_min: z.number().optional().describe('Minimum price'),
+      price_max: z.number().optional().describe('Maximum price'),
+      limit: z.number().optional().describe('Number of results (default: 5, max: 20)'),
     },
-    async ({ query, context, country, zip, price_min, price_max, limit }) => {
+    async ({ query, context, ships_to, price_min, price_max, limit }) => {
       const result = await searchGlobalProducts({
         query,
         context: context ?? query,
-        ...(country && { location: { country, ...(zip && { zip }) } }),
-        ...(price_min !== undefined && { price_min }),
-        ...(price_max !== undefined && { price_max }),
-        limit: limit ?? 5,
+        ...(ships_to && { ships_to }),
+        ...(price_min !== undefined && { min_price: price_min }),
+        ...(price_max !== undefined && { max_price: price_max }),
+        limit: Math.min(limit ?? 5, 20),
       });
 
       const raw = result as Record<string, unknown>;
-      const products = (Array.isArray(raw?.offers) ? raw.offers : []) as Record<string, unknown>[];
+      const offers = (Array.isArray(raw?.offers) ? raw.offers : []) as Record<string, unknown>[];
 
-      const lines = products.map((p, i) => formatProduct(p, i));
+      const lines = offers.map((p, i) => formatSearchProduct(p, i));
       const text = lines.length > 0
         ? `Found ${lines.length} product(s):\n\n${lines.join('\n\n')}`
         : 'No products found for this query.';
@@ -80,42 +93,64 @@ export function createMcpServer(): McpServer {
 
   // ----------------------------------------------------------------
   // Tool: get_product_details
-  // Retrieves full variant details + checkout URLs for a specific product
   // ----------------------------------------------------------------
   server.tool(
     'get_product_details',
-    'Get detailed information about a specific product including all variants, pricing, and checkout URLs. Use the UPID (Universal Product ID) from search_products results.',
+    'Get detailed information about a specific product including all variants, pricing, and checkout URLs. Use the ID from search_products results.',
     {
-      upid: z.string().describe('Universal Product ID returned by search_products'),
-      color: z.string().optional().describe('Preferred color option, e.g. "red", "black"'),
-      size: z.string().optional().describe('Preferred size option, e.g. "M", "42", "XL"'),
-      shop_domains: z.array(z.string()).optional().describe('Filter results to specific shop domains'),
+      upid: z.string().describe('Universal Product ID (the "ID:" field) from search_products results'),
+      color: z.string().optional().describe('Preferred color option'),
+      size: z.string().optional().describe('Preferred size option'),
+      ships_to: z.string().optional().describe('2-letter ISO country code to filter shipping availability'),
     },
-    async ({ upid, color, size, shop_domains }) => {
-      const options_preferences: Record<string, string> = {};
-      if (color) options_preferences['color'] = color;
-      if (size) options_preferences['size'] = size;
+    async ({ upid, color, size, ships_to }) => {
+      const product_options: Array<{ key: string; values: string[] }> = [];
+      if (color) product_options.push({ key: 'Color', values: [color] });
+      if (size) product_options.push({ key: 'Size', values: [size] });
 
       const result = await getGlobalProductDetails({
         upid,
-        ...(Object.keys(options_preferences).length > 0 && { options_preferences }),
-        ...(shop_domains && { shop_domains }),
+        ...(product_options.length > 0 && { product_options }),
+        ...(ships_to && { ships_to }),
       });
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      const raw = result as Record<string, unknown>;
+      const product = (raw?.product ?? raw) as Record<string, unknown>;
+      const perShopOffers = (product.products as Record<string, unknown>[] | undefined) ?? [];
+
+      const lines = perShopOffers.map((offer, i) => {
+        const shop = (offer.shop as Record<string, unknown> | undefined) ?? {};
+        const price = offer.price as Record<string, unknown> | undefined;
+        const variant = (offer.selectedProductVariant as Record<string, unknown> | undefined) ?? {};
+        const priceStr = price ? `${price.amount} ${price.currencyCode ?? ''}` : 'N/A';
+        return [
+          `${i + 1}. **${shop.name ?? 'Unknown'}** — ${priceStr}`,
+          offer.checkoutUrl ? `   **Checkout: ${offer.checkoutUrl}**` : '',
+          variant.id ? `   Variant ID: ${variant.id}` : '',
+        ].filter(Boolean).join('\n');
+      });
+
+      const images = (product.images as Record<string, unknown>[] | undefined) ?? [];
+      const imageUrl = images[0]?.url as string | undefined;
+
+      const header = [
+        `**${product.title}**`,
+        typeof product.description === 'string' ? product.description.slice(0, 200) : '',
+        imageUrl ? `Image: ${imageUrl}` : '',
+        '',
+        `Available at ${perShopOffers.length} shop(s):`,
+      ].filter(Boolean).join('\n');
+
+      const text = lines.length > 0
+        ? `${header}\n\n${lines.join('\n\n')}`
+        : 'No offers found for this product.';
+
+      return { content: [{ type: 'text', text }] };
     }
   );
 
   // ----------------------------------------------------------------
   // Tool: create_checkout
-  // Creates a checkout session on a specific Shopify merchant's store
   // ----------------------------------------------------------------
   server.tool(
     'create_checkout',
@@ -175,20 +210,12 @@ export function createMcpServer(): McpServer {
         ...(fulfillment && { fulfillment }),
       });
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );
 
   // ----------------------------------------------------------------
   // Tool: update_checkout
-  // Updates an existing checkout session (add buyer info, shipping, etc.)
   // ----------------------------------------------------------------
   server.tool(
     'update_checkout',
@@ -257,27 +284,17 @@ export function createMcpServer(): McpServer {
         ? { shipping_method_handle }
         : undefined;
 
-      const updates = {
+      const result = await updateCheckout(shop_domain, checkout_id, {
         ...(buyer && { buyer }),
         ...(fulfillment && { fulfillment }),
-      };
+      });
 
-      const result = await updateCheckout(shop_domain, checkout_id, updates);
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );
 
   // ----------------------------------------------------------------
   // Tool: complete_checkout
-  // Finalizes a checkout when status is ready_for_complete
   // ----------------------------------------------------------------
   server.tool(
     'complete_checkout',
@@ -289,21 +306,12 @@ export function createMcpServer(): McpServer {
     },
     async ({ shop_domain, checkout_id, idempotency_key }) => {
       const result = await completeCheckout(shop_domain, checkout_id, idempotency_key);
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );
 
   // ----------------------------------------------------------------
   // Tool: cancel_checkout
-  // Cancels an active checkout session
   // ----------------------------------------------------------------
   server.tool(
     'cancel_checkout',
@@ -314,15 +322,7 @@ export function createMcpServer(): McpServer {
     },
     async ({ shop_domain, checkout_id }) => {
       const result = await cancelCheckout(shop_domain, checkout_id);
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );
 

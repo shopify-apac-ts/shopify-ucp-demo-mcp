@@ -119,7 +119,8 @@ async function callCatalogMcp(toolName: string, args: Record<string, unknown>) {
 export interface SearchProductsParams {
   query: string;
   context: string;
-  ships_to?: string;     // ISO 2-letter country code
+  ships_to?: string;          // ISO 2-letter country code
+  available_for_sale?: boolean;
   min_price?: number;
   max_price?: number;
   limit?: number;
@@ -131,6 +132,7 @@ export async function searchGlobalProducts(params: SearchProductsParams) {
     query: params.query,
     context: params.context,
     ...(params.ships_to && { ships_to: params.ships_to }),
+    ...(params.available_for_sale !== undefined && { available_for_sale: params.available_for_sale }),
     ...(params.min_price !== undefined && { min_price: params.min_price }),
     ...(params.max_price !== undefined && { max_price: params.max_price }),
     ...(params.limit !== undefined && { limit: params.limit }),
@@ -141,8 +143,10 @@ export async function searchGlobalProducts(params: SearchProductsParams) {
 
 export interface GetProductDetailsParams {
   upid: string;
+  context?: string;
   product_options?: Array<{ key: string; values: string[] }>;
   ships_to?: string;
+  available_for_sale?: boolean;
   limit?: number;
 }
 
@@ -155,8 +159,10 @@ function extractBase62(upid: string): string {
 export async function getGlobalProductDetails(params: GetProductDetailsParams) {
   const args: Record<string, unknown> = {
     upid: extractBase62(params.upid),
+    ...(params.context && { context: params.context }),
     ...(params.product_options && { product_options: params.product_options }),
     ...(params.ships_to && { ships_to: params.ships_to }),
+    ...(params.available_for_sale !== undefined && { available_for_sale: params.available_for_sale }),
     ...(params.limit !== undefined && { limit: params.limit }),
   };
   return callCatalogMcp('get_global_product_details', args);

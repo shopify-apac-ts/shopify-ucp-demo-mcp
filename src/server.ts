@@ -12,10 +12,12 @@ import {
 // result.offers[] = universal products
 //   .id, .title, .description, .images[].url
 //   .priceRange.min.{ amount, currencyCode }
+//   .options[].{ name, values[].{ value, availableForSale } }
 //   .products[] = per-shop offers
 //     .checkoutUrl, .price.{ amount, currencyCode }
 //     .shop.{ name, onlineStoreUrl }
-//     .selectedProductVariant.{ id }
+//     .selectedProductVariant.{ id, options[].{ name, value } }
+//     .availableForSale
 function formatSearchProduct(p: Record<string, unknown>, index: number): string {
   const perShopOffers = (p.products as Record<string, unknown>[] | undefined) ?? [];
   const firstOffer = perShopOffers[0] ?? {};
@@ -44,11 +46,19 @@ function formatSearchProduct(p: Record<string, unknown>, index: number): string 
   const rawId = p.id as string | undefined;
   const base62 = rawId?.match(/\/p\/([^/?#]+)/)?.[1] ?? rawId ?? 'N/A';
 
+  // Show available options (e.g. sizes, colors)
+  const options = (p.options as Array<{ name: string; values: Array<{ value: string; availableForSale?: boolean }> }> | undefined) ?? [];
+  const optionLines = options.map((opt) => {
+    const vals = opt.values.map((v) => v.availableForSale === false ? `~~${v.value}~~` : v.value);
+    return `   ${opt.name}: ${vals.join(' / ')}`;
+  });
+
   return [
     `${index + 1}. **${p.title}** — ${priceStr}`,
     shopName ? `   Shop: ${shopName}${shopUrl ? ` (${shopUrl})` : ''}` : '',
     desc ? `   ${desc}` : '',
     `   ID: ${base62}`,
+    ...optionLines,
     imageUrl ? `   Image: ${imageUrl}` : '',
     checkoutUrl ? `   **Checkout: ${checkoutUrl}**` : '',
   ].filter(Boolean).join('\n');
@@ -65,20 +75,35 @@ export function createMcpServer(): McpServer {
   // ----------------------------------------------------------------
   server.tool(
     'search_products',
-    'Search for products across all Shopify merchants worldwide. Returns product list with titles, prices, images, and checkout URLs.',
+    [
+      'Search for products across all Shopify merchants worldwide.',
+      'LOCATION RULES (critical — follow before calling this tool):',
+      '1. If the user query or conversation mentions a city, region, or country (e.g. "Tokyo", "東京", "Japan", "日本", "New York", "US", "France"), extract the ISO-3166-1 alpha-2 country code (e.g. "JP", "US", "FR") and pass it as ships_to.',
+      '2. If no location can be inferred, ask the user: "What country are you shopping from? (e.g. JP for Japan, US for United States)" — do NOT call this tool until you have a country code.',
+      '3. Always include the buyer\'s location in the context field, e.g. "buyer located in Tokyo, Japan".',
+      '4. Always pass available_for_sale: true unless the buyer explicitly wants out-of-stock items.',
+      'Returns product list with titles, prices, options (size/color), images, and direct checkout URLs.',
+    ].join(' '),
     {
-      query: z.string().describe('Search query, e.g. "red sneakers" or "organic coffee beans"'),
-      context: z.string().optional().describe("Additional context about the buyer's needs, preferences, or situation. When omitted, the query is used as context."),
-      ships_to: z.string().optional().describe('2-letter ISO country code to filter products that ship to this country, e.g. "JP", "US"'),
+      query: z.string().describe('Search query, e.g. "spring parka" or "organic coffee beans"'),
+      context: z.string().describe("Context about the buyer: include location (e.g. 'buyer in Tokyo, Japan'), preferences, budget, style. This greatly improves result quality."),
+      ships_to: z.string().describe('2-letter ISO country code for shipping destination (REQUIRED — ask user if unknown). e.g. "JP", "US", "GB"'),
+      available_for_sale: z.boolean().optional().describe('Only return in-stock purchasable products (default: true)'),
       price_min: z.number().optional().describe('Minimum price'),
       price_max: z.number().optional().describe('Maximum price'),
       limit: z.number().optional().describe('Number of results (default: 5, max: 20)'),
     },
-    async ({ query, context, ships_to, price_min, price_max, limit }) => {
+    async ({ query, context, ships_to, available_for_sale, price_min, price_max, limit }) => {
+      // Enrich context with location info if ships_to is provided
+      const enrichedContext = ships_to
+        ? context.includes(ships_to) ? context : `${context} [ships_to: ${ships_to}]`
+        : context;
+
       const result = await searchGlobalProducts({
         query,
-        context: context ?? query,
-        ...(ships_to && { ships_to }),
+        context: enrichedContext,
+        ships_to,
+        available_for_sale: available_for_sale !== false, // default true
         ...(price_min !== undefined && { min_price: price_min }),
         ...(price_max !== undefined && { max_price: price_max }),
         limit: Math.min(limit ?? 5, 20),
@@ -101,22 +126,32 @@ export function createMcpServer(): McpServer {
   // ----------------------------------------------------------------
   server.tool(
     'get_product_details',
-    'Get detailed information about a specific product including all variants, pricing, and checkout URLs. Use the ID from search_products results.',
+    [
+      'Get detailed information about a specific product: all variants, sizes, colors, pricing, and per-shop checkout URLs.',
+      'Use the Base62 ID from search_products results.',
+      'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call.',
+      'If ships_to is not passed, the API may return offers that do not ship to the buyer\'s country.',
+      'Always pass available_for_sale: true (default) to show only purchasable variants.',
+    ].join(' '),
     {
-      upid: z.string().describe('Universal Product ID (the "ID:" field) from search_products results'),
+      upid: z.string().describe('Universal Product ID (Base62) from the "ID:" field in search_products results'),
+      context: z.string().optional().describe("Buyer context including location, e.g. 'buyer in Tokyo, Japan looking for size M in yellow'"),
+      ships_to: z.string().optional().describe('2-letter ISO country code — MUST match the ships_to used in search_products (e.g. "JP")'),
+      available_for_sale: z.boolean().optional().describe('Only return in-stock offers (default: true)'),
       color: z.string().optional().describe('Preferred color option'),
       size: z.string().optional().describe('Preferred size option'),
-      ships_to: z.string().optional().describe('2-letter ISO country code to filter shipping availability'),
     },
-    async ({ upid, color, size, ships_to }) => {
+    async ({ upid, context, ships_to, available_for_sale, color, size }) => {
       const product_options: Array<{ key: string; values: string[] }> = [];
       if (color) product_options.push({ key: 'Color', values: [color] });
       if (size) product_options.push({ key: 'Size', values: [size] });
 
       const result = await getGlobalProductDetails({
         upid,
+        ...(context && { context }),
         ...(product_options.length > 0 && { product_options }),
-        ...(ships_to && { ships_to }),
+        ships_to,
+        available_for_sale: available_for_sale !== false, // default true
       });
 
       const raw = result as Record<string, unknown>;
@@ -127,28 +162,45 @@ export function createMcpServer(): McpServer {
         const shop = (offer.shop as Record<string, unknown> | undefined) ?? {};
         const price = offer.price as Record<string, unknown> | undefined;
         const variant = (offer.selectedProductVariant as Record<string, unknown> | undefined) ?? {};
+        const variantOptions = (variant.options as Array<{ name: string; value: string }> | undefined) ?? [];
         const priceStr = price ? `${price.amount} ${price.currencyCode ?? ''}` : 'N/A';
+        const optStr = variantOptions.length > 0
+          ? variantOptions.map((o) => `${o.name}: ${o.value}`).join(', ')
+          : '';
         return [
-          `${i + 1}. **${shop.name ?? 'Unknown'}** — ${priceStr}`,
+          `${i + 1}. **${shop.name ?? 'Shop'}** — ${priceStr}${optStr ? ` (${optStr})` : ''}`,
+          offer.availableForSale === false ? '   ⚠️ Currently unavailable' : '',
           offer.checkoutUrl ? `   **Checkout: ${offer.checkoutUrl}**` : '',
+          shop.onlineStoreUrl ? `   Store: ${shop.onlineStoreUrl}` : '',
           variant.id ? `   Variant ID: ${variant.id}` : '',
         ].filter(Boolean).join('\n');
       });
 
+      // Product-level options (all available variants)
+      const productOptions = (product.options as Array<{ name: string; values: Array<{ value: string; availableForSale?: boolean }> }> | undefined) ?? [];
+      const optionSummary = productOptions.map((opt) => {
+        const vals = opt.values.map((v) => v.availableForSale === false ? `~~${v.value}~~` : v.value);
+        return `**${opt.name}**: ${vals.join(' / ')}`;
+      }).join('\n');
+
       const images = (product.images as Record<string, unknown>[] | undefined) ?? [];
       const imageUrl = images[0]?.url as string | undefined;
 
+      const topFeatures = (product.topFeatures as string[] | undefined) ?? [];
+
       const header = [
         `**${product.title}**`,
-        typeof product.description === 'string' ? product.description.slice(0, 200) : '',
-        imageUrl ? `Image: ${imageUrl}` : '',
+        typeof product.description === 'string' ? product.description.slice(0, 300) : '',
+        imageUrl ? `\nImage: ${imageUrl}` : '',
+        optionSummary ? `\n${optionSummary}` : '',
+        topFeatures.length > 0 ? `\nFeatures:\n${topFeatures.map((f) => `• ${f}`).join('\n')}` : '',
         '',
-        `Available at ${perShopOffers.length} shop(s):`,
+        `Available at ${perShopOffers.length} shop(s)${ships_to ? ` shipping to ${ships_to}` : ''}:`,
       ].filter(Boolean).join('\n');
 
       const text = lines.length > 0
         ? `${header}\n\n${lines.join('\n\n')}`
-        : 'No offers found for this product.';
+        : `No offers found for this product${ships_to ? ` shipping to ${ships_to}` : ''}. Try calling without ships_to to see all available offers.`;
 
       return { content: [{ type: 'text', text }] };
     }

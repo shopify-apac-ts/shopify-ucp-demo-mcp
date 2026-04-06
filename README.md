@@ -23,6 +23,8 @@ This Server  (Node.js on Render)
     └──→  Shopify Checkout MCP (https://{shop}/api/ucp/mcp)
 ```
 
+For a detailed sequence diagram showing the full interaction flow between the AI Agent, Demo MCP Server, and Shopify APIs, see [docs/sequence-diagram.md](docs/sequence-diagram.md).
+
 ## Setup
 
 ### 1. Get Shopify API credentials

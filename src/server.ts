@@ -220,6 +220,14 @@ export function createMcpServer(): McpServer {
         shippingNote,
       ].filter(Boolean).join('\n');
 
+      // Debug: dump raw response structure when no offers returned
+      if (lines.length === 0) {
+        console.error('[server] get_product_details 0 offers. raw keys:', Object.keys(raw));
+        console.error('[server] product keys:', Object.keys(product));
+        console.error('[server] product.title:', product.title);
+        console.error('[server] product.products type:', typeof product.products, Array.isArray(product.products) ? `len=${(product.products as unknown[]).length}` : JSON.stringify(product.products)?.slice(0, 100));
+      }
+
       const text = lines.length > 0
         ? `${header}\n\n${lines.join('\n\n')}`
         : `Product found but no shop offers returned. This may be a temporary API issue. UPID: ${upid}`;

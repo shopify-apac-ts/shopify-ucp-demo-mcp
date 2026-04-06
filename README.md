@@ -41,8 +41,8 @@ cp .env.example .env
 ### 3. Run locally
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 The MCP endpoint is available at `http://localhost:3000/mcp`.
@@ -50,10 +50,19 @@ The MCP endpoint is available at `http://localhost:3000/mcp`.
 ### 4. Deploy to Render
 
 1. Push to GitHub (triggers auto-deploy via Render)
-2. Set environment variables in Render dashboard:
+2. Set the **Build Command** in Render dashboard to:
+   ```
+   pnpm install --prod=false && pnpm run build
+   ```
+3. Set **Start Command** to:
+   ```
+   node dist/index.js
+   ```
+4. Set environment variables in Render dashboard:
    - `SHOPIFY_CLIENT_ID`
    - `SHOPIFY_CLIENT_SECRET`
    - `UCP_AGENT_PROFILE` (your Render URL)
+   - `SHOPIFY_CATALOG_ID` *(optional)* — saved catalog slug from Dev Dashboard
 
 ## Connect your AI to this MCP server
 
@@ -82,22 +91,45 @@ For Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
+For Claude Code (CLI):
+
+```bash
+claude mcp add shopify-ucp --transport http https://your-app-name.onrender.com/mcp
+```
+
 ## Example conversation
 
-> **User:** Find me a good mechanical keyboard under $150.
+> **User:** Find me a spring parka available in Tokyo.
 >
-> **AI:** *(calls `search_products` with query="mechanical keyboard", price_max=150)*
-> Here are some options I found across Shopify stores...
+> **AI:** *(detects "Tokyo" → `ships_to: "JP"`, calls `search_products`)*
+> Here are 5 parkas that ship to Japan...
 >
-> **User:** I'll take the third one in size US 10.
+> **User:** Tell me more about the first one.
 >
-> **AI:** *(calls `get_product_details` to get variant ID, then `create_checkout`)*
-> I've started checkout on [storename]. What's your shipping address?
+> **AI:** *(calls `get_product_details` with `ships_to: "JP"`)*
+> Available sizes: S / M / L / XL. Checkout: [url]
 >
-> **User:** Ship to 123 Main St, New York, NY 10001
+> **User:** I'll take size M.
+>
+> **AI:** *(calls `create_checkout` with the variant ID)*
+> Checkout started. What's your shipping address?
+>
+> **User:** 〒100-0001 東京都千代田区...
 >
 > **AI:** *(calls `update_checkout` with address)*
-> Checkout is ready. Please complete payment at: [continue_url]
+> Ready to complete. Please proceed to payment: [continue_url]
+
+### Location handling
+
+The AI agent automatically extracts the shipping country from the user's query:
+
+| Mentioned | `ships_to` |
+|---|---|
+| Tokyo, 東京, Japan, 日本 | `JP` |
+| New York, US, USA | `US` |
+| London, UK, England | `GB` |
+
+If no location can be inferred, the AI asks: *"What country are you shopping from?"* before searching.
 
 ## Checkout flow
 
@@ -113,6 +145,15 @@ status: requires_escalation → show continue_url to buyer (payment UI)
 status: ready_for_complete → complete_checkout
     ↓
 status: completed ✓
+```
+
+## Development
+
+```bash
+pnpm install          # install dependencies
+pnpm run dev          # start with hot-reload (tsx watch)
+pnpm run build        # compile TypeScript → dist/
+pnpm run typecheck    # type-check without emitting
 ```
 
 ## References

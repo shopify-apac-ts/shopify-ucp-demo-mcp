@@ -128,37 +128,51 @@ export function createMcpServer(): McpServer {
     'get_product_details',
     [
       'Get detailed information about a specific product: all variants, sizes, colors, pricing, and per-shop checkout URLs.',
-      'Use the Base62 ID from search_products results.',
-      'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call.',
-      'If ships_to is not passed, the API may return offers that do not ship to the buyer\'s country.',
-      'Always pass available_for_sale: true (default) to show only purchasable variants.',
+      'Use the Base62 ID from the "ID:" field in search_products results.',
+      'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call so only offers that ship to the buyer\'s country are shown.',
+      'Do NOT pass available_for_sale — the tool shows all variants with their availability status so the buyer can choose.',
     ].join(' '),
     {
       upid: z.string().describe('Universal Product ID (Base62) from the "ID:" field in search_products results'),
       context: z.string().optional().describe("Buyer context including location, e.g. 'buyer in Tokyo, Japan looking for size M in yellow'"),
-      ships_to: z.string().optional().describe('2-letter ISO country code — MUST match the ships_to used in search_products (e.g. "JP")'),
-      available_for_sale: z.boolean().optional().describe('Only return in-stock offers (default: true)'),
+      ships_to: z.string().optional().describe('2-letter ISO country code — MUST match the ships_to used in search_products (e.g. "JP", "US")'),
       color: z.string().optional().describe('Preferred color option'),
       size: z.string().optional().describe('Preferred size option'),
     },
-    async ({ upid, context, ships_to, available_for_sale, color, size }) => {
+    async ({ upid, context, ships_to, color, size }) => {
       const product_options: Array<{ key: string; values: string[] }> = [];
       if (color) product_options.push({ key: 'Color', values: [color] });
       if (size) product_options.push({ key: 'Size', values: [size] });
 
+      // First call: with ships_to filter (if provided)
       const result = await getGlobalProductDetails({
         upid,
         ...(context && { context }),
         ...(product_options.length > 0 && { product_options }),
-        ships_to,
-        available_for_sale: available_for_sale !== false, // default true
+        ...(ships_to && { ships_to }),
+        // Do NOT pass available_for_sale — we want all offers to show variant availability
       });
 
       const raw = result as Record<string, unknown>;
       const product = (raw?.product ?? raw) as Record<string, unknown>;
-      const perShopOffers = (product.products as Record<string, unknown>[] | undefined) ?? [];
+      let perShopOffers = (product.products as Record<string, unknown>[] | undefined) ?? [];
 
-      const lines = perShopOffers.map((offer, i) => {
+      // Fallback: if ships_to filtering returned 0 offers, retry without it
+      let usedFallback = false;
+      if (perShopOffers.length === 0 && ships_to) {
+        console.error(`[server] get_product_details: 0 offers with ships_to=${ships_to}, retrying without filter`);
+        const fallbackResult = await getGlobalProductDetails({
+          upid,
+          ...(context && { context }),
+          ...(product_options.length > 0 && { product_options }),
+        });
+        const fallbackRaw = fallbackResult as Record<string, unknown>;
+        const fallbackProduct = (fallbackRaw?.product ?? fallbackRaw) as Record<string, unknown>;
+        perShopOffers = (fallbackProduct.products as Record<string, unknown>[] | undefined) ?? [];
+        usedFallback = true;
+      }
+
+      const formatOffer = (offer: Record<string, unknown>, i: number): string => {
         const shop = (offer.shop as Record<string, unknown> | undefined) ?? {};
         const price = offer.price as Record<string, unknown> | undefined;
         const variant = (offer.selectedProductVariant as Record<string, unknown> | undefined) ?? {};
@@ -167,14 +181,18 @@ export function createMcpServer(): McpServer {
         const optStr = variantOptions.length > 0
           ? variantOptions.map((o) => `${o.name}: ${o.value}`).join(', ')
           : '';
+        const availStr = offer.availableForSale === false ? ' ⚠️ sold out' : '';
         return [
-          `${i + 1}. **${shop.name ?? 'Shop'}** — ${priceStr}${optStr ? ` (${optStr})` : ''}`,
-          offer.availableForSale === false ? '   ⚠️ Currently unavailable' : '',
-          offer.checkoutUrl ? `   **Checkout: ${offer.checkoutUrl}**` : '',
+          `${i + 1}. **${shop.name ?? 'Shop'}** — ${priceStr}${optStr ? ` (${optStr})` : ''}${availStr}`,
+          offer.checkoutUrl && offer.availableForSale !== false
+            ? `   **Checkout: ${offer.checkoutUrl}**`
+            : '',
           shop.onlineStoreUrl ? `   Store: ${shop.onlineStoreUrl}` : '',
           variant.id ? `   Variant ID: ${variant.id}` : '',
         ].filter(Boolean).join('\n');
-      });
+      };
+
+      const lines = perShopOffers.map((offer, i) => formatOffer(offer, i));
 
       // Product-level options (all available variants)
       const productOptions = (product.options as Array<{ name: string; values: Array<{ value: string; availableForSale?: boolean }> }> | undefined) ?? [];
@@ -185,8 +203,13 @@ export function createMcpServer(): McpServer {
 
       const images = (product.images as Record<string, unknown>[] | undefined) ?? [];
       const imageUrl = images[0]?.url as string | undefined;
-
       const topFeatures = (product.topFeatures as string[] | undefined) ?? [];
+
+      const shippingNote = usedFallback
+        ? `\n⚠️ No offers found shipping to ${ships_to}. Showing all available offers globally:`
+        : ships_to
+        ? `\nAvailable at ${perShopOffers.length} shop(s) shipping to ${ships_to}:`
+        : `\nAvailable at ${perShopOffers.length} shop(s):`;
 
       const header = [
         `**${product.title}**`,
@@ -194,13 +217,12 @@ export function createMcpServer(): McpServer {
         imageUrl ? `\nImage: ${imageUrl}` : '',
         optionSummary ? `\n${optionSummary}` : '',
         topFeatures.length > 0 ? `\nFeatures:\n${topFeatures.map((f) => `• ${f}`).join('\n')}` : '',
-        '',
-        `Available at ${perShopOffers.length} shop(s)${ships_to ? ` shipping to ${ships_to}` : ''}:`,
+        shippingNote,
       ].filter(Boolean).join('\n');
 
       const text = lines.length > 0
         ? `${header}\n\n${lines.join('\n\n')}`
-        : `No offers found for this product${ships_to ? ` shipping to ${ships_to}` : ''}. Try calling without ships_to to see all available offers.`;
+        : `Product found but no shop offers returned. This may be a temporary API issue. UPID: ${upid}`;
 
       return { content: [{ type: 'text', text }] };
     }

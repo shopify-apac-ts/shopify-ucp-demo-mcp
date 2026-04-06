@@ -76,6 +76,9 @@ async function callCatalogMcp(toolName: string, args: Record<string, unknown>) {
     id: nextId(),
   };
 
+  // Debug: log the exact args being sent to Catalog MCP
+  console.error(`[catalog] ${toolName} args:`, JSON.stringify(args));
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json, text/event-stream',
@@ -113,7 +116,14 @@ async function callCatalogMcp(toolName: string, args: Record<string, unknown>) {
     throw new Error(`No text content in Catalog MCP response: ${JSON.stringify(json)}`);
   }
 
-  return JSON.parse(textContent.text);
+  const parsed = JSON.parse(textContent.text);
+  // Debug: log response structure
+  const debugInfo = toolName === 'search_global_products'
+    ? `offers.length=${Array.isArray(parsed?.offers) ? parsed.offers.length : 'N/A'}`
+    : `product.products.length=${Array.isArray(parsed?.product?.products) ? parsed.product.products.length : 'N/A'}`;
+  console.error(`[catalog] ${toolName} response: ${debugInfo}`);
+
+  return parsed;
 }
 
 export interface SearchProductsParams {

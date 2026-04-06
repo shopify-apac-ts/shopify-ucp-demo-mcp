@@ -9,7 +9,7 @@ const PORT = process.env.PORT ?? 3000;
 
 // Health check — Render uses this to verify the service is up
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'shopify-ucp-demo-mcp' });
+  res.json({ status: 'ok', service: 'shopify-ucp-demo-mcp', commit: process.env.RENDER_GIT_COMMIT ?? 'local' });
 });
 
 // MCP endpoint — accepts Streamable HTTP transport (JSON-RPC 2.0 over POST)

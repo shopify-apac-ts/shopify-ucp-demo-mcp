@@ -125,7 +125,7 @@ claude mcp add shopify-ucp --transport http https://your-app-name.onrender.com/m
 
 | Prompt | What the AI does |
 |---|---|
-| Find me a spring parka available in Tokyo. / 東京で手に入る春のパーカーを探して | Detects "Tokyo" → `ships_to: "JP"` |
+| American-made jeans available in Tokyo. / 東京で手に入るアメリカ製のジーンズ | Detects "Tokyo" → `ships_to: "JP"` |
 | Japanese spring fashion available in America. / アメリカで入手可能な日本風の春向けファッション | Detects "America" → `ships_to: "US"` |
 | Traditional Japanese miscellaneous goods/sundries available in the United States. / アメリカで手に入る、日本の伝統的な雑貨 | Detects "United States" → `ships_to: "US"` |
 

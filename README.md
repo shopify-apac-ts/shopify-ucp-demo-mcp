@@ -121,6 +121,14 @@ claude mcp add shopify-ucp --transport http https://your-app-name.onrender.com/m
 > **AI:** *(calls `update_checkout` with address)*
 > Ready to complete. Please proceed to payment: [continue_url]
 
+### More sample prompts
+
+| Prompt | What the AI does |
+|---|---|
+| Find me a spring parka available in Tokyo. | Detects "Tokyo" → `ships_to: "JP"` |
+| Japanese spring fashion available in America. / アメリカで入手可能な日本風の春向けファッション | Detects "America" → `ships_to: "US"` |
+| Traditional Japanese miscellaneous goods/sundries available in the United States. / アメリカで手に入る、日本の伝統的な雑貨 | Detects "United States" → `ships_to: "US"` |
+
 ### Location handling
 
 The AI agent automatically extracts the shipping country from the user's query:

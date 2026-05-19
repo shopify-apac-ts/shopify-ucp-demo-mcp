@@ -162,8 +162,9 @@ export interface GetProductDetailsParams {
   limit?: number;
 }
 
-// Extract Base62 ID from full GID (e.g. "gid://shopify/p/AbC123" → "AbC123")
-function extractBase62(upid: string): string {
+// Extract Base62 ID from full GID (e.g. "gid://shopify/p/AbC123" → "AbC123").
+// Accepts a bare Base62 id and returns it unchanged.
+export function extractBase62(upid: string): string {
   const match = upid.match(/\/p\/([^/?#]+)/);
   return match ? match[1] : upid;
 }

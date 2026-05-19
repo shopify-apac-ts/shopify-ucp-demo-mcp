@@ -10,8 +10,12 @@ function checkoutMcpUrl(shopDomain: string): string {
 
 let requestId = 0;
 
+// Default to Shopify's published reference UCP agent profile. A bare root URL
+// (e.g. https://example.onrender.com) is not spec-compliant — the URL must
+// resolve to a valid UCP profile JSON document.
 const UCP_AGENT_PROFILE =
-  process.env.UCP_AGENT_PROFILE ?? 'https://shopify-ucp-demo-mcp.onrender.com';
+  process.env.UCP_AGENT_PROFILE ??
+  'https://shopify.dev/ucp/agent-profiles/2026-04-08/valid-with-capabilities.json';
 
 async function callCheckoutMcp(
   shopDomain: string,

@@ -4,12 +4,11 @@ const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
+// Shared in-flight refresh — without this, concurrent callers seeing an
+// expired token would each fire their own /auth/access_token request.
+let inflight: Promise<string> | null = null;
 
-export async function getBearerToken(): Promise<string> {
-  if (cachedToken && Date.now() < tokenExpiresAt - EXPIRY_BUFFER_MS) {
-    return cachedToken;
-  }
-
+async function fetchToken(): Promise<string> {
   const clientId = process.env.SHOPIFY_CLIENT_ID;
   const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
 
@@ -40,6 +39,18 @@ export async function getBearerToken(): Promise<string> {
 
   cachedToken = data.access_token;
   tokenExpiresAt = Date.now() + data.expires_in * 1000;
-
   return cachedToken;
+}
+
+export async function getBearerToken(): Promise<string> {
+  if (cachedToken && Date.now() < tokenExpiresAt - EXPIRY_BUFFER_MS) {
+    return cachedToken;
+  }
+  if (inflight) {
+    return inflight;
+  }
+  inflight = fetchToken().finally(() => {
+    inflight = null;
+  });
+  return inflight;
 }

@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { searchGlobalProducts, getGlobalProductDetails } from './catalog.js';
+import { searchGlobalProducts, getGlobalProductDetails, extractBase62 } from './catalog.js';
 import {
   createCheckout,
   updateCheckout,
@@ -66,7 +66,7 @@ function formatSearchProduct(p: Record<string, unknown>, index: number): string 
 
   // Extract Base62 UPID for use with get_product_details
   const rawId = p.id as string | undefined;
-  const base62 = rawId?.match(/\/p\/([^/?#]+)/)?.[1] ?? rawId ?? 'N/A';
+  const base62 = rawId ? extractBase62(rawId) : 'N/A';
 
   // Show available options (e.g. sizes, colors)
   const options = (p.options as Array<{ name: string; values: Array<{ value: string; availableForSale?: boolean }> }> | undefined) ?? [];
@@ -112,7 +112,7 @@ export function createMcpServer(): McpServer {
       'Always include: buyer location, product origin if mentioned, style/quality preferences, brand expectations, and any other details from the conversation.',
       'Examples: "buyer in Tokyo looking for authentic American denim brands, premium quality, ships from US"; "buyer in Paris seeking organic Japanese skincare, natural ingredients".',
       'Returns product list with titles, prices, ratings, options (size/color), and checkout URLs.',
-    ].join(' '),
+    ].join('\n'),
     {
       query: z.string().describe('Search query, e.g. "American jeans" or "Japanese skincare"'),
       context: z.string().describe(
@@ -168,7 +168,7 @@ export function createMcpServer(): McpServer {
       'Use the Base62 ID from the "ID:" field in search_products results.',
       'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call so only offers that ship to the buyer\'s country are shown.',
       'Do NOT pass available_for_sale — the tool shows all variants with their availability status so the buyer can choose.',
-    ].join(' '),
+    ].join('\n'),
     {
       upid: z.string().describe('Universal Product ID (Base62) from the "ID:" field in search_products results'),
       context: z.string().optional().describe("Buyer context including location, e.g. 'buyer in Tokyo, Japan looking for size M in yellow'"),
@@ -309,7 +309,7 @@ export function createMcpServer(): McpServer {
       'IMPORTANT: The shop may not support UCP Checkout MCP (503 AuthenticationFailed means the shop has not enabled UCP).',
       'If this tool fails with a 503 error, show the buyer the checkoutUrl from get_product_details results instead.',
       'Extract shop_domain from the checkoutUrl hostname (e.g. "store.myshopify.com") or onlineStoreUrl.',
-    ].join(' '),
+    ].join('\n'),
     {
       shop_domain: z.string().describe('Shopify store domain, e.g. "example.myshopify.com" — extract from checkoutUrl or onlineStoreUrl'),
       currency: z.string().describe('ISO 4217 currency code, e.g. "USD", "JPY"'),

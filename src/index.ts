@@ -32,9 +32,19 @@ app.post('/mcp', async (req, res) => {
   await transport.handleRequest(req, res, req.body);
 });
 
-// Debug endpoint — returns raw Catalog MCP responses for diagnosis.
+// Debug endpoints — return raw Catalog MCP responses for local diagnosis.
+// Disabled when NODE_ENV=production to avoid letting anonymous traffic
+// burn Shopify Catalog API quota on the deployed server.
 // Usage: GET /debug/search?q=kimono&ships_to=US
 //        GET /debug/detail?upid=ABC123&ships_to=US
+app.use('/debug', (_req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    res.status(404).end();
+    return;
+  }
+  next();
+});
+
 app.get('/debug/search', async (req, res) => {
   const q = String(req.query.q ?? 'Japanese spring fashion');
   const ships_to = req.query.ships_to ? String(req.query.ships_to) : undefined;

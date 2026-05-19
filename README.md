@@ -13,6 +13,39 @@ A Remote MCP server that lets any AI agent (Claude, ChatGPT, etc.) search Shopif
 | `complete_checkout` | Place the order when checkout status is `ready_for_complete` |
 | `cancel_checkout` | Cancel an active checkout session |
 
+### UCP-spec tool mapping
+
+This sample exposes its own tool names (above) but each one is a thin wrapper around the
+canonical Universal Commerce Protocol tools defined by Shopify. The mapping is:
+
+| This server | UCP / Shopify spec tool | Endpoint |
+|---|---|---|
+| `search_products` | [`search_global_products`](https://shopify.dev/docs/agents/catalog/mcp) | Catalog MCP — `https://discover.shopifyapps.com/global/mcp` |
+| `get_product_details` | [`get_global_product_details`](https://shopify.dev/docs/agents/catalog/mcp) | Catalog MCP — `https://discover.shopifyapps.com/global/mcp` |
+| `create_checkout` | [`create_checkout`](https://shopify.dev/docs/agents/checkout/mcp) | Checkout MCP — `https://{shop}/api/ucp/mcp` |
+| `update_checkout` | [`update_checkout`](https://shopify.dev/docs/agents/checkout/mcp) (PUT semantics) | Checkout MCP — `https://{shop}/api/ucp/mcp` |
+| `complete_checkout` | [`complete_checkout`](https://shopify.dev/docs/agents/checkout/mcp) | Checkout MCP — `https://{shop}/api/ucp/mcp` |
+| `cancel_checkout` | [`cancel_checkout`](https://shopify.dev/docs/agents/checkout/mcp) | Checkout MCP — `https://{shop}/api/ucp/mcp` |
+
+Every outgoing call carries `meta.ucp-agent.profile` (see `UCP_AGENT_PROFILE` below).
+Calls that mutate state (`complete_checkout`, `cancel_checkout`) also carry
+`meta.idempotency-key` so retries are safe.
+
+### No cart layer — by design
+
+The full UCP spec defines a cart resource (`create_cart` / `get_cart` /
+`update_cart` / `cancel_cart`) between catalog search and checkout. This sample
+**skips the cart layer on purpose** and goes straight from `get_product_details`
+to `create_checkout`, because:
+
+- Most agent flows in this demo are single-line-item ("buy this one item") and a
+  cart adds a round-trip without changing the outcome.
+- Shopify's Checkout MCP can ingest the `line_items` directly when the checkout
+  is created, so cart state lives inside the checkout session.
+- Adding the cart layer is mechanical when needed; see
+  [docs/escalation.md](docs/escalation.md) for the full UCP tool set this would
+  expose.
+
 ## Architecture
 
 ```
@@ -28,6 +61,8 @@ For a detailed sequence diagram showing the full interaction flow between the AI
 For an explanation of UCP escalation — what this sample demos, what it doesn't, and how its tools map to the buyer-experience modes — see [docs/escalation.md](docs/escalation.md).
 
 For implementation tips on improving search quality, ratings, and checkout handling, see [docs/tips.md](docs/tips.md).
+
+To verify the wire format using Shopify's published [UCP CLI](https://ucp.dev/docs/cli) — including the spec-named tools (`search_catalog`, `get_product`, `create_checkout`, etc.) that this sample wraps — see [docs/test-with-ucp-cli.md](docs/test-with-ucp-cli.md).
 
 ## Setup
 

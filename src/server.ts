@@ -373,10 +373,11 @@ export function createMcpServer(): McpServer {
       } catch (e) {
         const msg = String(e);
         if (msg.includes('503') || msg.includes('AuthenticationFailed') || msg.includes('Service temporarily unavailable')) {
+          console.error(`[server] create_checkout UCP-unsupported on ${shop_domain}:`, msg);
           return {
             content: [{
               type: 'text',
-              text: `The store "${shop_domain}" does not support UCP Checkout MCP (${msg.slice(0, 120)}).\n\nPlease use the checkoutUrl from the product details to proceed with purchase directly.`,
+              text: `The store "${shop_domain}" has not enabled UCP Checkout MCP. Please use the checkoutUrl from the get_product_details result to direct the buyer to the merchant's standard checkout.`,
             }],
           };
         }

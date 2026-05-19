@@ -174,13 +174,18 @@ function formatSearchProduct(p: Record<string, unknown>, index: number): string 
     return `   ${opt.name}: ${vals.join(' / ')}`;
   });
 
+  // Render the image as a markdown thumbnail (![alt](url)) so clients that
+  // support inline image rendering (Claude Desktop, web UIs) display it.
+  // Place it on its own un-indented line so the list-item continuation rules
+  // don't swallow the image syntax.
+  const titleForAlt = (p.title as string | undefined) ?? 'Product image';
   return [
     `${index + 1}. **${p.title}** — ${priceStr}${ratingStr ? `  ${ratingStr}` : ''}`,
+    imageUrl ? `\n![${titleForAlt}](${imageUrl})\n` : '',
     shopName ? `   Shop: ${shopName}${shopUrl ? ` (${shopUrl})` : ''}` : '',
     desc ? `   ${desc}` : '',
-    `   ID: ${base62}`,
+    `   <!-- product_id (internal, do not show to buyer): ${base62} -->`,
     ...optionLines,
-    imageUrl ? `   Image: ${imageUrl}` : '',
     checkoutUrl
       ? `   **Checkout: ${checkoutUrl}**`
       : productPageUrl
@@ -211,6 +216,8 @@ export function createMcpServer(): McpServer {
       'Always include: buyer location, product origin if mentioned, style/quality preferences, brand expectations, and any other details from the conversation.',
       'Examples: "buyer in Tokyo looking for authentic American denim brands, premium quality, ships from US"; "buyer in Paris seeking organic Japanese skincare, natural ingredients".',
       'Returns product list with titles, prices, ratings, options (size/color), and checkout URLs.',
+      'NAME-BASED ADDRESSING (important for buyer conversation):',
+      'Each result carries an internal product_id in an HTML comment — do NOT show it to the buyer or ask them to quote it. When asking the buyer to pick a product, refer to it by its title only (e.g. "Would you like the Levi\'s 501 or the Wrangler Cowboy Cut?"). Look up the matching product_id yourself when you call get_product_details.',
     ].join('\n'),
     {
       query: z.string().describe('Search query, e.g. "American jeans" or "Japanese skincare"'),
@@ -264,12 +271,12 @@ export function createMcpServer(): McpServer {
     'get_product_details',
     [
       'Get detailed information about a specific product: all variants, sizes, colors, pricing, and per-shop checkout URLs.',
-      'Use the Base62 ID from the "ID:" field in search_products results.',
+      'NAME → ID LOOKUP: The buyer will refer to the product by its title (e.g. "the first one", "the Levi\'s 501"). Match that to the corresponding entry in your previous search_products result and pass that entry\'s internal product_id (the Base62 value in the HTML comment) as upid. Never ask the buyer to provide an ID.',
       'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call so only offers that ship to the buyer\'s country are shown.',
       'Do NOT pass available_for_sale — the tool shows all variants with their availability status so the buyer can choose.',
     ].join('\n'),
     {
-      upid: z.string().describe('Universal Product ID (Base62) from the "ID:" field in search_products results'),
+      upid: z.string().describe('Universal Product ID (Base62) — read from the HTML comment in the previous search_products result; never ask the buyer for it'),
       context: z.string().optional().describe("Buyer context including location, e.g. 'buyer in Tokyo, Japan looking for size M in yellow'"),
       ships_to: z.string().optional().describe('2-letter ISO country code — MUST match the ships_to used in search_products (e.g. "JP", "US")'),
       color: z.string().optional().describe('Preferred color option'),
@@ -374,8 +381,10 @@ export function createMcpServer(): McpServer {
 
       const header = [
         `**${productTitle}**`,
+        // Render as markdown thumbnail so clients that support image rendering
+        // display it inline; falls back to a plain URL on text-only clients.
+        imageUrl ? `\n![${productTitle}](${imageUrl})` : '',
         typeof product.description === 'string' ? product.description.slice(0, 300) : '',
-        imageUrl ? `\nImage: ${imageUrl}` : '',
         optionSummary ? `\n${optionSummary}` : '',
         topFeatures.length > 0 ? `\nFeatures:\n${topFeatures.map((f) => `• ${f}`).join('\n')}` : '',
         shippingNote,

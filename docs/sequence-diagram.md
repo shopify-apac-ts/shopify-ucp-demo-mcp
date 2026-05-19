@@ -36,6 +36,7 @@ sequenceDiagram
 
     Note over A,K: 4. Checkout — UCP-enabled shops only
 
+    Note over A: AI carries currency + variant_id<br/>from the get_product_details<br/>response (do NOT infer currency<br/>from buyer country)
     A->>M: tools/call: create_checkout<br/>{shop_domain, currency, line_items}
     M->>K: POST /api/ucp/mcp · tools/call: create_checkout<br/>{meta: {ucp-agent: {profile}},<br/>checkout: {currency, line_items: [{quantity, item: {id}}]}}
 

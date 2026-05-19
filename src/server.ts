@@ -306,13 +306,14 @@ export function createMcpServer(): McpServer {
     [
       'Create a checkout session for a product on a Shopify merchant store.',
       'Returns checkout status and a continue_url for the buyer to complete payment.',
+      'CURRENCY RULE: Pass the currency shown for the selected offer in the preceding get_product_details output (the second token of the price string, e.g. "59.00 USD" → "USD"). Do NOT infer from the buyer\'s country — a US-based store may only price/accept USD even when the buyer is in Japan; passing JPY will fail.',
       'IMPORTANT: The shop may not support UCP Checkout MCP (503 AuthenticationFailed means the shop has not enabled UCP).',
       'If this tool fails with a 503 error, show the buyer the checkoutUrl from get_product_details results instead.',
       'Extract shop_domain from the checkoutUrl hostname (e.g. "store.myshopify.com") or onlineStoreUrl.',
     ].join('\n'),
     {
       shop_domain: z.string().describe('Shopify store domain, e.g. "example.myshopify.com" — extract from checkoutUrl or onlineStoreUrl'),
-      currency: z.string().describe('ISO 4217 currency code, e.g. "USD", "JPY"'),
+      currency: z.string().describe('ISO 4217 currency code from the selected offer in get_product_details — the merchant\'s pricing currency, NOT the buyer\'s local currency. e.g. if the offer is "59.00 USD", pass "USD" (even for a JP buyer).'),
       line_items: z.array(z.object({
         variant_id: z.string().describe('Product variant GID, e.g. "gid://shopify/ProductVariant/12345"'),
         quantity: z.number().int().min(1),

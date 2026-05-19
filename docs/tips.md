@@ -91,7 +91,35 @@ The `checkoutUrl` is a standard Shopify cart permalink that works for all stores
 https://store.myshopify.com/cart/VARIANT_ID:QUANTITY?_gsid=...
 ```
 
-## 6. Token caching
+## 6. Carry currency from product details into checkout
+
+The `currency` argument for `create_checkout` must match the **merchant's pricing currency**, not the buyer's country. A US-based store can sell to a JP buyer but may only price and accept payment in USD — passing `JPY` in that case will fail. Take the currency directly from the offer returned by `get_product_details`:
+
+```json
+// In the get_product_details response:
+{
+  "products": [{
+    "price": { "amount": "59.00", "currencyCode": "USD" },
+    "checkoutUrl": "..."
+  }]
+}
+```
+
+```json
+// Pass that currency through to create_checkout:
+{
+  "name": "create_checkout",
+  "arguments": {
+    "shop_domain": "store.myshopify.com",
+    "currency": "USD",
+    "line_items": [{ "variant_id": "...", "quantity": 1 }]
+  }
+}
+```
+
+This sample server's `create_checkout` tool description tells the AI explicitly: *"Pass the currency shown for the selected offer in the preceding get_product_details output. Do NOT infer from the buyer's country."* The sequence diagram in [sequence-diagram.md](sequence-diagram.md) also marks this handoff.
+
+## 7. Token caching
 
 The bearer token from `api.shopify.com/auth/access_token` expires in 60 minutes. Cache it with a 5-minute buffer (refresh at 55 minutes) to avoid unnecessary re-authentication on every request.
 

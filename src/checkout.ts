@@ -303,16 +303,77 @@ const WRITABLE_CHECKOUT_FIELDS = [
   'signals',
 ] as const;
 
-// Strip computed fulfillment subfields (`groups`, `line_item_ids`,
-// per-destination computed IDs, etc.) so we only send the writable shape:
-// `methods[]` and `shipping_method_handle`.
+// Writable subfields of `fulfillment.methods[i].destinations[j]`. Anything
+// else (notably `id`) is computed by Shopify and must not be echoed back.
+const WRITABLE_DESTINATION_FIELDS = [
+  'first_name',
+  'last_name',
+  'street_address',
+  'address2',
+  'address_locality',
+  'address_region',
+  'postal_code',
+  'address_country',
+  'phone',
+] as const;
+
+function sanitizeDestination(input: unknown): Record<string, unknown> | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const src = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of WRITABLE_DESTINATION_FIELDS) {
+    if (src[key] !== undefined) out[key] = src[key];
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+// Writable subfields of `fulfillment.methods[i]`. Drop the computed
+// `id`, `line_item_ids`, `selected_destination_id`, `groups` (delivery
+// option set), etc. so Shopify accepts the PUT body.
+function sanitizeMethod(input: unknown): Record<string, unknown> | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const src = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof src.type === 'string') out.type = src.type;
+  if (Array.isArray(src.destinations)) {
+    const cleaned = src.destinations
+      .map(sanitizeDestination)
+      .filter((d): d is Record<string, unknown> => d !== undefined);
+    if (cleaned.length > 0) out.destinations = cleaned;
+  }
+  if (typeof src.shipping_method_handle === 'string') {
+    out.shipping_method_handle = src.shipping_method_handle;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+// Strip computed fulfillment subfields recursively. Only `methods[]` (with
+// per-method whitelist) and the top-level `shipping_method_handle` survive.
 function sanitizeFulfillment(input: unknown): Record<string, unknown> | undefined {
   if (!input || typeof input !== 'object') return undefined;
   const src = input as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  if (Array.isArray(src.methods)) out.methods = src.methods;
+  if (Array.isArray(src.methods)) {
+    const cleaned = src.methods
+      .map(sanitizeMethod)
+      .filter((m): m is Record<string, unknown> => m !== undefined);
+    if (cleaned.length > 0) out.methods = cleaned;
+  }
   if (typeof src.shipping_method_handle === 'string') {
     out.shipping_method_handle = src.shipping_method_handle;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+// `payment.instruments` is the resolved list of buyer payment instruments —
+// it's response-only. Drop it (and drop payment entirely when empty).
+function sanitizePayment(input: unknown): Record<string, unknown> | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const src = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(src)) {
+    if (key === 'instruments') continue;
+    out[key] = value;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }
@@ -370,15 +431,20 @@ function mergeCheckout(
   for (const key of WRITABLE_CHECKOUT_FIELDS) {
     if (base[key] !== undefined) merged[key] = base[key];
   }
-  // discounts: only `codes` is writable; `applied` is computed.
+  // discounts: only `codes` is writable; `applied` is computed. Drop the
+  // field entirely when codes is empty — Shopify rejects empty arrays.
   if (base.discounts && typeof base.discounts === 'object') {
     const codes = (base.discounts as Record<string, unknown>).codes;
-    if (codes !== undefined) merged.discounts = { codes };
+    if (Array.isArray(codes) && codes.length > 0) merged.discounts = { codes };
   }
   // Sanitize any prior fulfillment so we don't ship computed subfields back.
-  const sanitized = sanitizeFulfillment(merged.fulfillment);
-  if (sanitized) merged.fulfillment = sanitized;
+  const sanitizedFulfillment = sanitizeFulfillment(merged.fulfillment);
+  if (sanitizedFulfillment) merged.fulfillment = sanitizedFulfillment;
   else delete merged.fulfillment;
+  // Strip computed `payment.instruments` and drop payment if it's empty.
+  const sanitizedPayment = sanitizePayment(merged.payment);
+  if (sanitizedPayment) merged.payment = sanitizedPayment;
+  else delete merged.payment;
 
   // line_items: full replacement when supplied (caller already builds the full list)
   if (updates.line_items) {

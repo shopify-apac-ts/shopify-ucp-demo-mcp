@@ -128,29 +128,49 @@ async function callCheckoutMcp(
   };
 
   // Shopify Checkout MCP rejects requests with `AuthenticationFailed:
-  // Missing required buyer IP header.` when the buyer IP is absent. The
-  // wording matches Shopify's existing convention for server-side
-  // Storefront API requests — the canonical header is the case-sensitive
-  // `Shopify-Storefront-Buyer-IP`. Also send `User-Agent` so Shopify can
-  // attribute traffic correctly.
+  // Missing required buyer IP header.` when the buyer IP is absent.
+  // The exact header name isn't documented for Checkout MCP, so send
+  // every plausible candidate at once — Shopify ignores unknown headers
+  // and logs will tell us which one it actually honors. Mirror Shopify's
+  // own Storefront API convention plus standard proxy/forwarding names.
   const buyerIp = getBuyerIp();
   const userAgent = getUserAgent();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
   };
-  if (buyerIp) headers['Shopify-Storefront-Buyer-IP'] = buyerIp;
+  if (buyerIp) {
+    headers['Shopify-Storefront-Buyer-IP'] = buyerIp;
+    headers['Shopify-Buyer-IP'] = buyerIp;
+    headers['X-Forwarded-For'] = buyerIp;
+    headers['X-Real-IP'] = buyerIp;
+    headers['Buyer-IP'] = buyerIp;
+  }
   if (userAgent) headers['User-Agent'] = userAgent;
 
-  console.error(
-    `[checkout] ${toolName} buyerIp=${buyerIp ?? '(none)'} url=${url}`
-  );
+  // Full request dump so we can verify what Shopify actually receives —
+  // matches the [catalog] args pattern from catalog.ts.
+  console.error(`[checkout] ${toolName} -> ${url}`);
+  console.error(`[checkout] ${toolName} headers:`, JSON.stringify(headers));
+  console.error(`[checkout] ${toolName} body:`, JSON.stringify(body));
 
   const response = await fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
   });
+
+  // Echo Shopify's response headers (and status) — sometimes Shopify
+  // includes hints like 'x-required-headers' or 'www-authenticate' that
+  // pinpoint the exact field they expected.
+  const respHeaders: Record<string, string> = {};
+  response.headers.forEach((v, k) => {
+    respHeaders[k] = v;
+  });
+  console.error(
+    `[checkout] ${toolName} response: status=${response.status}`,
+    JSON.stringify(respHeaders)
+  );
 
   if (!response.ok) {
     const text = await response.text();

@@ -290,8 +290,71 @@ export async function getCheckout(shopDomain: string, checkoutId: string) {
   return callCheckoutMcp(shopDomain, 'get_checkout', args);
 }
 
+// Fields update_checkout accepts in the `checkout` body (UCP spec).
+// Anything else returned by get_checkout (`ucp` capabilities, `messages`,
+// `totals`, `expires_at`, `links`, `status`, `continue_url`, ...) is
+// response-only metadata — echoing it back triggers `Invalid params`.
+const WRITABLE_CHECKOUT_FIELDS = [
+  'currency',
+  'line_items',
+  'buyer',
+  'fulfillment',
+  'payment',
+  'signals',
+] as const;
+
+// Strip computed fulfillment subfields (`groups`, `line_item_ids`,
+// per-destination computed IDs, etc.) so we only send the writable shape:
+// `methods[]` and `shipping_method_handle`.
+function sanitizeFulfillment(input: unknown): Record<string, unknown> | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const src = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (Array.isArray(src.methods)) out.methods = src.methods;
+  if (typeof src.shipping_method_handle === 'string') {
+    out.shipping_method_handle = src.shipping_method_handle;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+// Apply the buyer's name/phone to any destination that doesn't already
+// specify them. Shopify returns recoverable `delivery_first_name_required`
+// / `delivery_last_name_required` / `delivery_phone_number_required` errors
+// otherwise — UCP keeps buyer identity and shipping recipient as separate
+// fields, but in agent commerce they're almost always the same person.
+function mirrorBuyerToDestinations(
+  fulfillment: Record<string, unknown> | undefined,
+  buyer: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!fulfillment || !buyer) return fulfillment;
+  const methods = fulfillment.methods;
+  if (!Array.isArray(methods)) return fulfillment;
+  const patchedMethods = methods.map((method) => {
+    if (!method || typeof method !== 'object') return method;
+    const m = method as Record<string, unknown>;
+    const destinations = m.destinations;
+    if (!Array.isArray(destinations)) return method;
+    const patched = destinations.map((d) => {
+      if (!d || typeof d !== 'object') return d;
+      const dest = d as Record<string, unknown>;
+      const next = { ...dest };
+      if (!next.first_name && buyer.first_name) next.first_name = buyer.first_name;
+      if (!next.last_name && buyer.last_name) next.last_name = buyer.last_name;
+      if (!next.phone && buyer.phone) next.phone = buyer.phone;
+      return next;
+    });
+    return { ...m, destinations: patched };
+  });
+  return { ...fulfillment, methods: patchedMethods };
+}
+
 // Merge incoming changes into the existing checkout payload from get_checkout.
 // Returns the merged checkout object to send to update_checkout.
+//
+// Critical: we copy only WRITABLE_CHECKOUT_FIELDS from `existing`. Spreading
+// the whole get_checkout response back into update_checkout causes Shopify
+// to reject the call with `Invalid params` (response-only fields like `ucp`,
+// `messages`, `totals`, `status`, `continue_url` are not accepted as input).
 function mergeCheckout(
   existing: Record<string, unknown> | undefined,
   updates: {
@@ -301,7 +364,21 @@ function mergeCheckout(
   }
 ): Record<string, unknown> {
   const base = existing ?? {};
-  const merged: Record<string, unknown> = { ...base };
+  const merged: Record<string, unknown> = {};
+
+  // Whitelist copy from previous state.
+  for (const key of WRITABLE_CHECKOUT_FIELDS) {
+    if (base[key] !== undefined) merged[key] = base[key];
+  }
+  // discounts: only `codes` is writable; `applied` is computed.
+  if (base.discounts && typeof base.discounts === 'object') {
+    const codes = (base.discounts as Record<string, unknown>).codes;
+    if (codes !== undefined) merged.discounts = { codes };
+  }
+  // Sanitize any prior fulfillment so we don't ship computed subfields back.
+  const sanitized = sanitizeFulfillment(merged.fulfillment);
+  if (sanitized) merged.fulfillment = sanitized;
+  else delete merged.fulfillment;
 
   // line_items: full replacement when supplied (caller already builds the full list)
   if (updates.line_items) {
@@ -310,16 +387,24 @@ function mergeCheckout(
 
   // buyer: shallow merge over existing buyer
   if (updates.buyer) {
-    const existingBuyer = (base.buyer as Record<string, unknown> | undefined) ?? {};
+    const existingBuyer = (merged.buyer as Record<string, unknown> | undefined) ?? {};
     merged.buyer = { ...existingBuyer, ...updates.buyer };
   }
 
-  // fulfillment: replace methods/handle when supplied
+  // fulfillment: replace methods/handle when supplied, dropping computed fields.
   if (updates.fulfillment) {
-    const incoming = toUcpFulfillment(updates.fulfillment) as Record<string, unknown>;
-    const existingFulfillment = (base.fulfillment as Record<string, unknown> | undefined) ?? {};
+    const incoming = sanitizeFulfillment(toUcpFulfillment(updates.fulfillment)) ?? {};
+    const existingFulfillment = (merged.fulfillment as Record<string, unknown> | undefined) ?? {};
     merged.fulfillment = { ...existingFulfillment, ...incoming };
   }
+
+  // Mirror buyer name/phone into destinations to avoid recoverable
+  // delivery_*_required errors when the caller passed only the buyer.
+  const mirroredFulfillment = mirrorBuyerToDestinations(
+    merged.fulfillment as Record<string, unknown> | undefined,
+    merged.buyer as Record<string, unknown> | undefined,
+  );
+  if (mirroredFulfillment) merged.fulfillment = mirroredFulfillment;
 
   return merged;
 }

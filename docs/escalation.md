@@ -172,7 +172,8 @@ sequenceDiagram
 Key implementation references:
 
 - **Status-driven dispatch** lives in the AI's tool descriptions, not in code: see the `update_checkout` description in [src/server.ts](../src/server.ts) where the AI is told "if status is `requires_escalation`, show the `continue_url` to the buyer"
-- **Fallback path** for non-UCP shops (HTTP 503) returns the Catalog MCP's `checkoutUrl` cart permalink instead — see the catch block around [src/server.ts:373](../src/server.ts#L373)
+- **Fallback path** for non-UCP shops: `src/checkout.ts` resolves the Checkout MCP endpoint via `/.well-known/ucp`. When the manifest returns 404 (or has no `dev.ucp.shopping` MCP transport), `resolveCheckoutMcpUrl` throws `UcpNotSupportedError` — `create_checkout` catches it and tells the AI to use the Catalog MCP's `checkoutUrl` cart permalink instead. See the catch block in [src/server.ts](../src/server.ts) around the `UcpNotSupportedError` instance check.
+- **continue_url decoration** appends `utm_source=ucp_demo_app` and `skip_shop_pay=true` so the buyer lands on the Shopify-hosted checkout with the prefilled address visible (and not on the Shop Pay OTP prompt) — see `decorateContinueUrl` in [src/server.ts](../src/server.ts).
 - **Currency handoff** from `get_product_details` into `create_checkout` is documented in [tips.md §6](tips.md)
 
 ## What this sample deliberately does **not** demo

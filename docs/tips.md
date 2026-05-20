@@ -77,19 +77,26 @@ The `products_limit` parameter controls how many per-shop offers are returned pe
 
 If you need to compare more shops for a single product, consider calling `get_global_product_details` with different `ships_to` / `ships_from` combinations.
 
-## 5. Handle UCP Checkout fallback gracefully
+## 5. Discover Checkout MCP via /.well-known/ucp and fall back gracefully
 
-Not all Shopify stores support the UCP Checkout MCP (`https://{shop}/api/ucp/mcp`). Stores that have not enabled UCP return HTTP 503 with `AuthenticationFailed`. Your agent should catch this and fall back to the `checkoutUrl` (cart permalink) returned by the Catalog MCP.
+Not every Shopify store has enabled the UCP Checkout MCP. The UCP spec defines `https://{shop}/.well-known/ucp` as the discovery document — fetch it once per shop and read `ucp.services["dev.ucp.shopping"][].endpoint` to find the canonical Checkout MCP URL. This matters because the Catalog MCP usually surfaces the shop's public custom domain (e.g. `pojstudio.com`), while the actual `/api/ucp/mcp` route lives on the `*.myshopify.com` host — only the manifest tells you the mapping.
+
+When the manifest returns **HTTP 404** (or omits the `dev.ucp.shopping` MCP transport), treat it as a clear "UCP not enabled on this shop" signal. Throw a typed error (see `UcpNotSupportedError` in [src/checkout.ts](../src/checkout.ts)) so the caller can catch it and fall back to the `checkoutUrl` cart permalink from the Catalog MCP response.
 
 ```
-Checkout MCP available  →  create_checkout → update_checkout → continue_url
-Checkout MCP unavailable (503)  →  show checkoutUrl from search/detail results
+/.well-known/ucp present     →  create_checkout → update_checkout → continue_url
+/.well-known/ucp returns 404 →  show checkoutUrl from search/detail results
 ```
 
 The `checkoutUrl` is a standard Shopify cart permalink that works for all stores, regardless of UCP support:
 ```
 https://store.myshopify.com/cart/VARIANT_ID:QUANTITY?_gsid=...
 ```
+
+Two practical refinements this sample uses:
+
+- **In-process cache** the resolved endpoint per shop — shops rarely change their UCP routing and discovery shouldn't be re-fetched on every checkout call.
+- **Short timeout (5s) on the manifest fetch** with a degraded fallback to the naive `*.myshopify.com/api/ucp/mcp` heuristic on network errors, so a flaky DNS lookup doesn't take the whole checkout flow down. A genuine 404 still throws `UcpNotSupportedError`.
 
 ## 6. Carry currency from product details into checkout
 

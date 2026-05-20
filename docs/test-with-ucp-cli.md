@@ -24,8 +24,7 @@ npm install -g @shopify/ucp-cli   # or: pnpm add -g @shopify/ucp-cli
 ucp --version
 ```
 
-(Optional, for use inside Claude Code with the Shopify AI Toolkit plugin —
-the same one this demo's README mentions.)
+(Optional, for use inside Claude Code with the Shopify AI Toolkit plugin.)
 
 ```bash
 claude plugin install shopify-ai-toolkit@claude-plugins-official

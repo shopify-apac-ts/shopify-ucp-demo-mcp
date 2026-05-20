@@ -1,12 +1,95 @@
 import { getBearerToken } from './auth.js';
 import { UCP_AGENT_PROFILE } from './ucp-config.js';
 
-// Checkout MCP endpoint is per-shop: https://{shop-domain}/api/ucp/mcp
-function checkoutMcpUrl(shopDomain: string): string {
-  const host = shopDomain.includes('.')
-    ? shopDomain
-    : `${shopDomain}.myshopify.com`;
-  return `https://${host}/api/ucp/mcp`;
+// Thrown when a shop's /.well-known/ucp manifest is absent or missing the
+// shopping service. Lets callers (e.g. server.ts) surface a clear
+// "shop has not enabled UCP" message instead of bubbling up a raw HTTP code.
+export class UcpNotSupportedError extends Error {
+  constructor(public shopDomain: string, public reason: string) {
+    super(`Shop ${shopDomain} has not enabled UCP Checkout MCP (${reason})`);
+    this.name = 'UcpNotSupportedError';
+  }
+}
+
+// Cache resolved endpoints in-memory so repeat calls in the same process
+// don't re-fetch the manifest. Shops rarely change their UCP routing.
+const endpointCache = new Map<string, string>();
+
+// Strip protocol/path and return the bare host (e.g. "pojstudio.com").
+function normalizeHost(input: string): string {
+  return input.replace(/^https?:\/\//, '').split('/')[0];
+}
+
+// Resolve the canonical Checkout MCP endpoint via /.well-known/ucp.
+//
+// Why this exists: Catalog MCP often surfaces a shop's public custom domain
+// (e.g. pojstudio.com), but the /api/ucp/mcp route is canonically hosted on
+// the *.myshopify.com domain (e.g. pieces-of-japan.myshopify.com). The
+// UCP spec defines /.well-known/ucp on the public domain as the discovery
+// document that points to the actual endpoint, so we resolve it before
+// every Checkout MCP call (cached after the first hit).
+//
+// Behavior:
+//   manifest present  → use services["dev.ucp.shopping"][0].endpoint
+//   manifest 404      → throw UcpNotSupportedError (shop hasn't enabled UCP)
+//   network/timeout   → fall back to the naive heuristic so a flaky DNS
+//                       lookup doesn't take the whole checkout flow down
+export async function resolveCheckoutMcpUrl(shopDomain: string): Promise<string> {
+  const host = normalizeHost(shopDomain);
+  const cached = endpointCache.get(host);
+  if (cached) return cached;
+
+  const manifestUrl = `https://${host}/.well-known/ucp`;
+  let response: Response;
+  try {
+    // Short timeout: discovery shouldn't block checkout flow indefinitely.
+    response = await fetch(manifestUrl, {
+      signal: AbortSignal.timeout(5000),
+      redirect: 'follow',
+    });
+  } catch (err) {
+    console.error(`[checkout] /.well-known/ucp fetch failed for ${host}:`, err);
+    // Network error — degrade to naive heuristic rather than failing hard.
+    const fallback = `https://${host.includes('.') ? host : `${host}.myshopify.com`}/api/ucp/mcp`;
+    endpointCache.set(host, fallback);
+    return fallback;
+  }
+
+  if (response.status === 404) {
+    throw new UcpNotSupportedError(host, 'no /.well-known/ucp manifest');
+  }
+  if (!response.ok) {
+    console.error(`[checkout] /.well-known/ucp returned ${response.status} for ${host}`);
+    const fallback = `https://${host.includes('.') ? host : `${host}.myshopify.com`}/api/ucp/mcp`;
+    endpointCache.set(host, fallback);
+    return fallback;
+  }
+
+  let manifest: {
+    ucp?: {
+      services?: {
+        'dev.ucp.shopping'?: Array<{ transport?: string; endpoint?: string }>;
+      };
+    };
+  };
+  try {
+    manifest = (await response.json()) as typeof manifest;
+  } catch (err) {
+    console.error(`[checkout] /.well-known/ucp JSON parse failed for ${host}:`, err);
+    throw new UcpNotSupportedError(host, 'malformed manifest');
+  }
+
+  const services = manifest?.ucp?.services?.['dev.ucp.shopping'] ?? [];
+  // Pick the MCP transport entry — UCP may advertise multiple transports
+  // (mcp, embedded, etc.); we only speak MCP here.
+  const mcpService = services.find((s) => s.transport === 'mcp' && s.endpoint);
+  if (!mcpService?.endpoint) {
+    throw new UcpNotSupportedError(host, 'manifest has no dev.ucp.shopping MCP endpoint');
+  }
+
+  endpointCache.set(host, mcpService.endpoint);
+  console.error(`[checkout] resolved ${host} → ${mcpService.endpoint}`);
+  return mcpService.endpoint;
 }
 
 let requestId = 0;
@@ -17,7 +100,10 @@ async function callCheckoutMcp(
   args: Record<string, unknown>
 ) {
   const token = await getBearerToken();
-  const url = checkoutMcpUrl(shopDomain);
+  // resolveCheckoutMcpUrl throws UcpNotSupportedError if /.well-known/ucp
+  // is missing — callers (server.ts) translate that to the buyer-facing
+  // "shop has not enabled UCP" message.
+  const url = await resolveCheckoutMcpUrl(shopDomain);
 
   const body = {
     jsonrpc: '2.0',

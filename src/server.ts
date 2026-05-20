@@ -6,6 +6,7 @@ import {
   updateCheckout,
   completeCheckout,
   cancelCheckout,
+  UcpNotSupportedError,
 } from './checkout.js';
 
 // Extract currency code from a price object — API uses both 'currencyCode' and 'currency'
@@ -479,9 +480,13 @@ export function createMcpServer(): McpServer {
         });
         return { content: [{ type: 'text', text: formatCheckoutResponse(result) }] };
       } catch (e) {
-        const msg = String(e);
-        if (msg.includes('503') || msg.includes('AuthenticationFailed') || msg.includes('Service temporarily unavailable')) {
-          console.error(`[server] create_checkout UCP-unsupported on ${shop_domain}:`, msg);
+        // UcpNotSupportedError is the spec-correct signal that this shop has
+        // no /.well-known/ucp manifest (or no MCP transport in it). Map it to
+        // the buyer-facing "use the standard checkoutUrl" fallback. Any other
+        // error (auth, network, malformed payload) is a real failure and
+        // should propagate so the user can see it.
+        if (e instanceof UcpNotSupportedError) {
+          console.error(`[server] create_checkout UCP-unsupported on ${shop_domain}: ${e.message}`);
           return {
             content: [{
               type: 'text',

@@ -123,10 +123,33 @@ above — the `shop.onlineStoreUrl` or the host of `checkoutUrl` — and use it 
 > standard `checkoutUrl` from `get_product` to send the buyer to the regular
 > hosted checkout.
 
+### 4.0 Discover the canonical endpoint — `/.well-known/ucp`
+
+Catalog MCP often surfaces a shop's **public custom domain** (e.g.
+`pojstudio.com`), but the `/api/ucp/mcp` route is canonically hosted on the
+`*.myshopify.com` admin domain (e.g. `pieces-of-japan.myshopify.com`). The
+UCP spec defines `/.well-known/ucp` on the public domain as the discovery
+document that points to the real endpoint:
+
+```bash
+curl -s https://pojstudio.com/.well-known/ucp | jq '.ucp.services["dev.ucp.shopping"]'
+# [
+#   { "transport": "mcp", "endpoint": "https://pieces-of-japan.myshopify.com/api/ucp/mcp", ... },
+#   { "transport": "embedded", ... }
+# ]
+```
+
+If `/.well-known/ucp` returns 404, the shop hasn't enabled UCP Checkout — fall
+back to the standard `checkoutUrl` from the Catalog response and let the buyer
+finish in the merchant's regular hosted checkout. This sample's
+[`resolveCheckoutMcpUrl`](../src/checkout.ts) does the same lookup before
+every Checkout MCP call (cached in-process).
+
 ### 4.1 `create_checkout` — empty buyer + address
 
 ```bash
-SHOP="example.myshopify.com"
+# Use the endpoint from 4.0, NOT the buyer-facing custom domain
+SHOP="pieces-of-japan.myshopify.com"
 
 ucp checkout create \
   --endpoint "https://$SHOP/api/ucp/mcp" \
@@ -237,7 +260,7 @@ you know they exist and can test them against Shopify directly:
 |---|---|---|
 | `create_cart` / `get_cart` / `update_cart` / `cancel_cart` | Cart resource between catalog and checkout | This demo goes straight to `create_checkout`; see the "No cart layer" note in the [README](../README.md). |
 | `get_order` | Fetch an order after `complete_checkout` returns | Out of scope for the demo flow; receipts are surfaced via `permalink_url`. |
-| `/.well-known/ucp` | Service-discovery document on the merchant origin | This server hard-codes the Shopify Catalog and Checkout endpoints — discovery isn't required for a single fixed backend. |
+| `get_order` companion: order webhooks | Push notifications when an order's state changes | The demo finishes at `complete_checkout`; no listener is wired. |
 
 ## References
 

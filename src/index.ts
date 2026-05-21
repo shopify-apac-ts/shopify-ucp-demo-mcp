@@ -24,9 +24,11 @@ app.get('/health', (_req, res) => {
 // This is intentional: the MCP session state (checkout IDs etc.) lives in the
 // AI client, not on this server.
 app.post('/mcp', async (req, res) => {
-  // Capture buyer-side context so the Checkout MCP layer can inject
-  // checkout.signals.dev.ucp.buyer_ip (required by UCP — without it,
-  // Shopify returns AuthenticationFailed: Missing required buyer IP header).
+  // Capture buyer-side context so the Checkout MCP layer can forward the
+  // Shopify-Buyer-IP HTTP header (required by Shopify — without it,
+  // Shopify returns HTTP 422 "Missing required buyer IP header.") and
+  // also populate checkout.signals.dev.ucp.buyer_ip in the body for
+  // UCP-spec compliance.
   const buyerIp = extractBuyerIp(req.headers, req.socket.remoteAddress);
   const userAgent =
     typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined;

@@ -168,11 +168,15 @@ See the [Wiki](../../wiki) for a video walkthrough using the prompt:
 
 ### More sample prompts
 
-| Prompt | What the AI does |
-|---|---|
-| American-made jeans available in Tokyo. / 東京で手に入るアメリカ製のジーンズ | Detects "Tokyo" → `ships_to: "JP"` |
-| Japanese spring fashion available in America. / アメリカで入手可能な日本風の春向けファッション | Detects "America" → `ships_to: "US"` |
-| Traditional Japanese miscellaneous goods/sundries available in the United States. / アメリカで手に入る、日本の伝統的な雑貨 | Detects "United States" → `ships_to: "US"` |
+These prompts go beyond search — each one expects the AI to pick a product, pre-fill saved buyer info, and hand back a payment-ready `continue_url` in a single turn.
+
+| Scenario | Prompt (EN) | Prompt (JP) |
+|---|---|---|
+| US-made → ship to JP | American-made selvedge denim jeans (W32 L32), around $200, that can ship to Tokyo. Pick one, use my usual address and email, and get it ready so I just need to pay. | 東京に発送できる、アメリカ製セルビッジデニム (W32 L32) を $200 前後で 1 本選んで。いつもの住所と連絡先で、あとは支払うだけの状態にして。 |
+| JP-style → ship within US | A Japanese-style cotton sashiko jacket in size M, under $150, that ships within the US. Pick one and set it up to ship to my California address — I just want to pay and be done. | アメリカ国内で買える、日本風のサシコ・ジャケット (M, $150 以下) を 1 着。カリフォルニアの住所に送るかたちで、あとはお支払いするだけにしておいて。 |
+| Gift to a US friend | I want to send a traditional Japanese ceramic mug (under $40) to my friend in Brooklyn as a gift. Pick one from a US shop, ship to [friend's address], and take me straight to the payment page. | ブルックリンの友人へのギフトに、日本の伝統的な陶器マグ ($40 以下) を 1 つ贈りたい。US 国内発送のショップから選んで、配送先は [friend's address]、そのまま支払いに進めるところまでお願い。 |
+| Ready-to-buy | Order a 12oz bag of single-origin coffee roasted in Maine, around $20, shipped to my usual US address. One pick is fine — take me to payment. | メイン州焙煎のシングルオリジンコーヒー (12oz, $20 前後) を、いつもの US 住所宛に 1 袋注文したい。1 件で OK、そのままお支払いまで連れて行って。 |
+| Re-order | Reorder the same Patagonia Better Sweater Fleece I bought before (Men's, Black, size M). Ship to my home — I just want to pay. | 前に買った Patagonia Better Sweater Fleece (Men's, Black, size M) をもう 1 着。自宅宛で、あとは支払うだけの状態にしておいて。 |
 
 ### Location handling
 

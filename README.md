@@ -218,3 +218,7 @@ pnpm run typecheck    # type-check without emitting
 - [Catalog MCP Reference](https://shopify.dev/docs/agents/catalog/mcp)
 - [Checkout MCP Reference](https://shopify.dev/docs/agents/checkout/mcp)
 - [MCP Specification](https://modelcontextprotocol.io)
+
+## Disclaimer
+
+This sample is provided for testing and educational purposes only. It is **not** an official Shopify product or endorsed solution. The author makes no warranties and accepts no responsibility for any issues, bugs, or damages arising from its use. Content and behavior may change without notice.

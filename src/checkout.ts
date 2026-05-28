@@ -61,9 +61,18 @@ export async function resolveCheckoutMcpUrl(shopDomain: string): Promise<string>
   let response: Response;
   try {
     // Short timeout: discovery shouldn't block checkout flow indefinitely.
+    // Browser-like UA: api.shopify.com / *.myshopify.com sit behind
+    // Cloudflare bot management which 403s requests with no UA from
+    // datacenter IPs (Cloudflare Workers). See auth.ts for context.
     response = await fetch(manifestUrl, {
       signal: AbortSignal.timeout(5000),
       redirect: 'follow',
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Accept: 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
     });
   } catch (err) {
     console.error(`[checkout] /.well-known/ucp fetch failed for ${host}:`, err);
@@ -141,13 +150,19 @@ async function callCheckoutMcp(
   // headers that hosting layers (Render, Cloudflare, etc.) may overwrite
   // or append to in flight, which can confuse downstream IP-handling code.
   const buyerIp = getBuyerIp();
-  const userAgent = getUserAgent();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
+    // Browser-like UA to avoid Cloudflare bot management 403s from
+    // datacenter IPs (Cloudflare Workers). The buyer's real UA still
+    // travels in the UCP body signal `dev.ucp.user_agent`; this header
+    // is only what Shopify's edge sees for fingerprinting.
+    'User-Agent':
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    Accept: 'application/json',
+    'Accept-Language': 'en-US,en;q=0.9',
   };
   if (buyerIp) headers['Shopify-Buyer-IP'] = buyerIp;
-  if (userAgent) headers['User-Agent'] = userAgent;
 
   // Full request dump so we can verify what Shopify actually receives —
   // matches the [catalog] args pattern from catalog.ts.

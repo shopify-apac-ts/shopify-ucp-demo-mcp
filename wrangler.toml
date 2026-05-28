@@ -1,0 +1,18 @@
+name = "shopify-ucp-demo-mcp"
+main = "src/worker.ts"
+compatibility_date = "2026-05-27"
+# nodejs_compat is required so node:async_hooks (AsyncLocalStorage in
+# request-context.ts) and process.env (read by catalog.ts / checkout.ts /
+# ucp-config.ts) work unmodified.
+compatibility_flags = ["nodejs_compat"]
+
+# Non-secret defaults can live here; secrets must be set via:
+#   wrangler secret put SHOPIFY_CLIENT_ID
+#   wrangler secret put SHOPIFY_CLIENT_SECRET
+# Override UCP_AGENT_PROFILE via `wrangler secret put` (or [vars] here)
+# only if you self-host a profile to bypass shopify.dev's CDN headers.
+# [vars]
+# UCP_AGENT_PROFILE = "https://your-host.example.com/agent-profile.json"
+
+[observability]
+enabled = true

@@ -21,7 +21,18 @@ async function fetchToken(): Promise<string> {
 
   const response = await fetch(TOKEN_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // api.shopify.com sits behind Cloudflare's bot management which 403s
+      // requests with no/unknown User-Agent (especially from datacenter
+      // IPs like Cloudflare Workers). A realistic UA may not be sufficient
+      // when the egress IP is in the Cloudflare range, but it removes the
+      // most obvious bot signal.
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      Accept: 'application/json',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
     body: JSON.stringify({
       client_id: clientId,
       client_secret: clientSecret,

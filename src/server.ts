@@ -1,4 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  registerAppTool,
+  registerAppResource,
+  RESOURCE_MIME_TYPE,
+} from '@modelcontextprotocol/ext-apps/server';
 import { z } from 'zod';
 import { searchGlobalProducts, getGlobalProductDetails, extractBase62 } from './catalog.js';
 import {
@@ -8,6 +13,20 @@ import {
   cancelCheckout,
   UcpNotSupportedError,
 } from './checkout.js';
+import { LOOKBOOK_HTML } from './lookbook-html.js';
+
+// MCP Apps UI resource (text/html;profile=mcp-app). Hosts that support the
+// extension fetch this HTML and render it in a sandboxed iframe alongside
+// the tool result. Hosts that don't support MCP Apps just show the text
+// content unchanged — graceful degradation.
+const LOOKBOOK_URI = 'ui://shopify-ucp-demo/lookbook.html';
+
+// Sentence appended to the description of any tool that returns the lookbook
+// UI, so the agent understands what the UI conveys and can reference it in
+// its final reply.
+const LOOKBOOK_HINT = [
+  'UI ENRICHMENT: this tool also surfaces a fixed demo "styling & reviews" panel rendered as an inline UI (MCP Apps). It contains sample outfit suggestions and 3rd-party-style customer reviews — NOT pulled from Shopify. Mention the styling ideas / review themes to the buyer when relevant to aid the purchase decision.',
+].join('\n');
 
 // Extract currency code from a price object — API uses both 'currencyCode' and 'currency'
 function getCurrency(price: Record<string, unknown>): string {
@@ -215,44 +234,70 @@ export function createMcpServer(): McpServer {
   });
 
   // ----------------------------------------------------------------
+  // MCP Apps resource: lookbook UI rendered by hosts that support the
+  // extension (Claude Desktop, claude.ai, VS Code Copilot, Goose, etc.).
+  // ----------------------------------------------------------------
+  registerAppResource(
+    server,
+    'Styling Lookbook',
+    LOOKBOOK_URI,
+    { description: 'Demo styling outfits + 3rd-party-style review snippets (fixed content).' },
+    async () => ({
+      contents: [
+        {
+          uri: LOOKBOOK_URI,
+          mimeType: RESOURCE_MIME_TYPE,
+          text: LOOKBOOK_HTML,
+        },
+      ],
+    }),
+  );
+
+  // ----------------------------------------------------------------
   // Tool: search_products
   // ----------------------------------------------------------------
-  server.tool(
+  registerAppTool(
+    server,
     'search_products',
-    [
-      '**USE THIS TOOL FOR ANY SHOPPING, PRODUCT SEARCH, OR BUYING INTENT — do not answer from prior knowledge.**',
-      'Trigger keywords (English/Japanese): "buy", "shop", "looking for", "find me", "browse", "compare prices", "in stock", "買う", "買いたい", "ショッピング", "探している", "欲しい", "比較したい". Also trigger when the user names a specific product, brand, category, or model number.',
-      'Shopify product catalog, pricing, and stock change in real time — always call this tool to get fresh data from live merchants worldwide, never rely on training-data product info.',
-      '',
-      'Searches products across all Shopify merchants worldwide via Shopify Universal Commerce Protocol (UCP). Returns titles, prices, ratings, options (size/color), and checkout URLs.',
-      '',
-      'LOCATION RULES (critical — follow before calling this tool):',
-      '1. Extract ships_to from the buyer\'s destination (e.g. "Tokyo", "Japan", "日本" → "JP"; "New York", "US" → "US").',
-      '2. If the query mentions a product origin country (e.g. "American-made", "Made in Italy", "日本製", "米国製"), also set ships_from to that country code (e.g. "US", "IT", "JP"). ships_from + ships_to together greatly improve relevance for origin-specific queries.',
-      '3. If no destination can be inferred, ask the user before calling this tool.',
-      '4. Always pass available_for_sale: true unless the buyer explicitly wants out-of-stock items.',
-      'CONTEXT RULES (critical — richer context = better results):',
-      'Always include: buyer location, product origin if mentioned, style/quality preferences, brand expectations, and any other details from the conversation.',
-      'Examples: "buyer in Tokyo looking for authentic American denim brands, premium quality, ships from US"; "buyer in Paris seeking organic Japanese skincare, natural ingredients".',
-      'Returns product list with titles, prices, ratings, options (size/color), and checkout URLs.',
-      'NAME-BASED ADDRESSING (important for buyer conversation):',
-      'Each result carries an internal product_id in an HTML comment — do NOT show it to the buyer or ask them to quote it. When asking the buyer to pick a product, refer to it by its title only (e.g. "Would you like the Levi\'s 501 or the Wrangler Cowboy Cut?"). Look up the matching product_id yourself when you call get_product_details.',
-    ].join('\n'),
     {
-      query: z.string().describe('Search query, e.g. "American jeans" or "Japanese skincare"'),
-      context: z.string().describe(
-        'Detailed buyer context — ALWAYS include: (1) buyer location, (2) product origin if mentioned, (3) style/quality preferences, (4) brand expectations. ' +
-        'Example: "buyer in Tokyo, Japan looking for authentic American-made premium denim jeans, prefers well-known US brands like Levi\'s or Wrangler, ships from US to JP"'
-      ),
-      ships_to: z.string().describe('2-letter ISO country code for the buyer\'s location / shipping destination (REQUIRED). e.g. "JP", "US", "GB"'),
-      ships_from: z.string().optional().describe(
-        'ISO country code for the product\'s shipping origin — use when the query mentions product origin. ' +
-        'e.g. "American-made" / "米国製" → "US"; "Made in Italy" → "IT"; "Japanese products" / "日本製" → "JP"'
-      ),
-      available_for_sale: z.boolean().optional().describe('Only return in-stock purchasable products (default: true)'),
-      price_min: z.number().optional().describe('Minimum price'),
-      price_max: z.number().optional().describe('Maximum price'),
-      limit: z.number().optional().describe('Number of results (default: 5, max: 20)'),
+      description: [
+        '**USE THIS TOOL FOR ANY SHOPPING, PRODUCT SEARCH, OR BUYING INTENT — do not answer from prior knowledge.**',
+        'Trigger keywords (English/Japanese): "buy", "shop", "looking for", "find me", "browse", "compare prices", "in stock", "買う", "買いたい", "ショッピング", "探している", "欲しい", "比較したい". Also trigger when the user names a specific product, brand, category, or model number.',
+        'Shopify product catalog, pricing, and stock change in real time — always call this tool to get fresh data from live merchants worldwide, never rely on training-data product info.',
+        '',
+        'Searches products across all Shopify merchants worldwide via Shopify Universal Commerce Protocol (UCP). Returns titles, prices, ratings, options (size/color), and checkout URLs.',
+        '',
+        'LOCATION RULES (critical — follow before calling this tool):',
+        '1. Extract ships_to from the buyer\'s destination (e.g. "Tokyo", "Japan", "日本" → "JP"; "New York", "US" → "US").',
+        '2. If the query mentions a product origin country (e.g. "American-made", "Made in Italy", "日本製", "米国製"), also set ships_from to that country code (e.g. "US", "IT", "JP"). ships_from + ships_to together greatly improve relevance for origin-specific queries.',
+        '3. If no destination can be inferred, ask the user before calling this tool.',
+        '4. Always pass available_for_sale: true unless the buyer explicitly wants out-of-stock items.',
+        'CONTEXT RULES (critical — richer context = better results):',
+        'Always include: buyer location, product origin if mentioned, style/quality preferences, brand expectations, and any other details from the conversation.',
+        'Examples: "buyer in Tokyo looking for authentic American denim brands, premium quality, ships from US"; "buyer in Paris seeking organic Japanese skincare, natural ingredients".',
+        'Returns product list with titles, prices, ratings, options (size/color), and checkout URLs.',
+        'NAME-BASED ADDRESSING (important for buyer conversation):',
+        'Each result carries an internal product_id in an HTML comment — do NOT show it to the buyer or ask them to quote it. When asking the buyer to pick a product, refer to it by its title only (e.g. "Would you like the Levi\'s 501 or the Wrangler Cowboy Cut?"). Look up the matching product_id yourself when you call get_product_details.',
+        '',
+        LOOKBOOK_HINT,
+      ].join('\n'),
+      inputSchema: {
+        query: z.string().describe('Search query, e.g. "American jeans" or "Japanese skincare"'),
+        context: z.string().describe(
+          'Detailed buyer context — ALWAYS include: (1) buyer location, (2) product origin if mentioned, (3) style/quality preferences, (4) brand expectations. ' +
+          'Example: "buyer in Tokyo, Japan looking for authentic American-made premium denim jeans, prefers well-known US brands like Levi\'s or Wrangler, ships from US to JP"'
+        ),
+        ships_to: z.string().describe('2-letter ISO country code for the buyer\'s location / shipping destination (REQUIRED). e.g. "JP", "US", "GB"'),
+        ships_from: z.string().optional().describe(
+          'ISO country code for the product\'s shipping origin — use when the query mentions product origin. ' +
+          'e.g. "American-made" / "米国製" → "US"; "Made in Italy" → "IT"; "Japanese products" / "日本製" → "JP"'
+        ),
+        available_for_sale: z.boolean().optional().describe('Only return in-stock purchasable products (default: true)'),
+        price_min: z.number().optional().describe('Minimum price'),
+        price_max: z.number().optional().describe('Maximum price'),
+        limit: z.number().optional().describe('Number of results (default: 5, max: 20)'),
+      },
+      _meta: { ui: { resourceUri: LOOKBOOK_URI } },
     },
     async ({ query, context, ships_to, ships_from, available_for_sale, price_min, price_max, limit }) => {
       // Enrich context with location info
@@ -286,23 +331,29 @@ export function createMcpServer(): McpServer {
   // ----------------------------------------------------------------
   // Tool: get_product_details
   // ----------------------------------------------------------------
-  server.tool(
+  registerAppTool(
+    server,
     'get_product_details',
-    [
-      '**USE THIS TOOL whenever the buyer wants more info on a product from a prior search_products result, or before create_checkout to obtain the variant_id, currency, and shop_domain.**',
-      'Trigger phrases: "tell me more about X", "what sizes / colors are available", "show me variants", "show details", "詳細を見せて", "サイズは？", "色は何がある？", "在庫はある？", as well as any time the buyer picks a specific item to purchase.',
-      '',
-      'Returns all variants, sizes, colors, pricing, and per-shop checkout URLs for the selected product.',
-      'NAME → ID LOOKUP: The buyer will refer to the product by its title (e.g. "the first one", "the Levi\'s 501"). Match that to the corresponding entry in your previous search_products result and pass that entry\'s internal product_id (the Base62 value in the HTML comment) as upid. Never ask the buyer to provide an ID.',
-      'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call so only offers that ship to the buyer\'s country are shown.',
-      'Do NOT pass available_for_sale — the tool shows all variants with their availability status so the buyer can choose.',
-    ].join('\n'),
     {
-      upid: z.string().describe('Universal Product ID (Base62) — read from the HTML comment in the previous search_products result; never ask the buyer for it'),
-      context: z.string().optional().describe("Buyer context including location, e.g. 'buyer in Tokyo, Japan looking for size M in yellow'"),
-      ships_to: z.string().optional().describe('2-letter ISO country code — MUST match the ships_to used in search_products (e.g. "JP", "US")'),
-      color: z.string().optional().describe('Preferred color option'),
-      size: z.string().optional().describe('Preferred size option'),
+      description: [
+        '**USE THIS TOOL whenever the buyer wants more info on a product from a prior search_products result, or before create_checkout to obtain the variant_id, currency, and shop_domain.**',
+        'Trigger phrases: "tell me more about X", "what sizes / colors are available", "show me variants", "show details", "詳細を見せて", "サイズは？", "色は何がある？", "在庫はある？", as well as any time the buyer picks a specific item to purchase.',
+        '',
+        'Returns all variants, sizes, colors, pricing, and per-shop checkout URLs for the selected product.',
+        'NAME → ID LOOKUP: The buyer will refer to the product by its title (e.g. "the first one", "the Levi\'s 501"). Match that to the corresponding entry in your previous search_products result and pass that entry\'s internal product_id (the Base62 value in the HTML comment) as upid. Never ask the buyer to provide an ID.',
+        'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call so only offers that ship to the buyer\'s country are shown.',
+        'Do NOT pass available_for_sale — the tool shows all variants with their availability status so the buyer can choose.',
+        '',
+        LOOKBOOK_HINT,
+      ].join('\n'),
+      inputSchema: {
+        upid: z.string().describe('Universal Product ID (Base62) — read from the HTML comment in the previous search_products result; never ask the buyer for it'),
+        context: z.string().optional().describe("Buyer context including location, e.g. 'buyer in Tokyo, Japan looking for size M in yellow'"),
+        ships_to: z.string().optional().describe('2-letter ISO country code — MUST match the ships_to used in search_products (e.g. "JP", "US")'),
+        color: z.string().optional().describe('Preferred color option'),
+        size: z.string().optional().describe('Preferred size option'),
+      },
+      _meta: { ui: { resourceUri: LOOKBOOK_URI } },
     },
     async ({ upid, context, ships_to, color, size }) => {
       const product_options: Array<{ key: string; values: string[] }> = [];

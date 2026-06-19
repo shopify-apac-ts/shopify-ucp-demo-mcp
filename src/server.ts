@@ -21,6 +21,40 @@ function appendQuery(url: string, key: string, value: string): string {
   return url + (url.includes('?') ? '&' : '?') + `${key}=${value}`;
 }
 
+function imageUrlFrom(value: unknown, depth = 0): string | undefined {
+  if (!value || typeof value !== 'object' || depth > 2) return undefined;
+  const record = value as Record<string, unknown>;
+
+  for (const key of ['url', 'src', 'originalSrc', 'transformedSrc']) {
+    const url = record[key];
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) return url;
+  }
+
+  for (const key of ['image', 'featuredImage', 'previewImage', 'mediaImage']) {
+    const url = imageUrlFrom(record[key], depth + 1);
+    if (url) return url;
+  }
+
+  for (const key of ['images', 'media']) {
+    const values = record[key];
+    if (!Array.isArray(values)) continue;
+    for (const item of values) {
+      const url = imageUrlFrom(item, depth + 1);
+      if (url) return url;
+    }
+  }
+
+  return undefined;
+}
+
+function firstImageUrl(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const url = imageUrlFrom(value);
+    if (url) return url;
+  }
+  return undefined;
+}
+
 // Decorate the buyer-facing continue_url before handing it to the AI:
 //   - utm_source=ucp_demo_app : per Checkout MCP docs, agents brand the
 //     handoff URL so merchants can attribute traffic from this sample.
@@ -138,7 +172,7 @@ function formatCheckoutResponse(result: unknown): string {
 //     .selectedProductVariant.{ id, options[].{ name, value } }
 //     .availableForSale
 // Fallback: .variants[] = per-shop variant offers (alternate schema used by some responses)
-//   .id, .displayName, .checkoutUrl, .variantUrl, .price.{ amount, currencyCode }
+//   .id, .displayName, .checkoutUrl, .variantUrl, .price.{ amount, currencyCode }, image/images
 function formatSearchProduct(p: Record<string, unknown>, index: number): string {
   const perShopOffers = (p.products as Record<string, unknown>[] | undefined) ?? [];
   // Fallback: some Catalog MCP responses use variants[] instead of products[]
@@ -163,8 +197,8 @@ function formatSearchProduct(p: Record<string, unknown>, index: number): string 
     ? `⭐ ${offerRating.value.toFixed(1)}${offerRating.count ? ` (${offerRating.count})` : ''}`
     : '';
 
-  const images = (p.images as Record<string, unknown>[] | undefined) ?? [];
-  const imageUrl = images[0]?.url as string | undefined;
+  const selectedVariant = firstOffer.selectedProductVariant as Record<string, unknown> | undefined;
+  const imageUrl = firstImageUrl(p, selectedVariant, firstOffer, ...variants, ...perShopOffers);
 
   const desc = typeof p.description === 'string'
     ? p.description.slice(0, 120) + (p.description.length > 120 ? '…' : '')
@@ -386,8 +420,11 @@ export function createMcpServer(): McpServer {
         return `**${opt.name}**: ${vals.join(' / ')}`;
       }).join('\n');
 
-      const images = (product.images as Record<string, unknown>[] | undefined) ?? [];
-      const imageUrl = images[0]?.url as string | undefined;
+      const detailVariants = perShopOffers.map((offer) => {
+        const selected = (offer.selectedProductVariant as Record<string, unknown> | undefined) ?? offer;
+        return selected;
+      });
+      const imageUrl = firstImageUrl(product, ...detailVariants, ...perShopOffers);
       const topFeatures = (product.topFeatures as string[] | undefined) ?? [];
 
       // Get product title — may be missing in some API responses; fall back to description snippet

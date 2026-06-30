@@ -87,7 +87,7 @@ This Server  (Node.js on Render)
 
 For a detailed sequence diagram showing the full interaction flow between the AI Agent, Demo MCP Server, and Shopify APIs, see [docs/sequence-diagram.md](docs/sequence-diagram.md).
 
-For a simplified, presentation-ready visual overview of the UCP buyer journey, see [docs/ucp-overview.html](docs/ucp-overview.html).
+For a simplified, presentation-ready visual overview of the UCP buyer journey, see [docs/index.html](docs/index.html). A Japanese version is available at [docs/index.ja.html](docs/index.ja.html).
 
 For an explanation of UCP escalation — what this sample demos, what it doesn't, and how its tools map to the buyer-experience modes — see [docs/escalation.md](docs/escalation.md).
 

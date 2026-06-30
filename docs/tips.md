@@ -218,6 +218,54 @@ const response = await fetch(CATALOG_MCP_URL, {
 });
 ```
 
+## 10. Web Search vs UCP Search (ウェブ検索 vs UCP検索)
+
+Without UCP, AI product discovery usually starts with web search or web
+scraping. The agent meets pages that a search engine already crawled, so product
+facts can be stale, incomplete, or optimized for human browsing rather than
+machine action. Even if one store adds a UCP profile at its root, an AI agent is
+not guaranteed to inspect that profile during broad product discovery; it may
+only reach the store directly after web search has already selected that result.
+
+Shopify Catalog changes the first step. Instead of asking a search engine for
+pages, the agent can call a Catalog API for commerce data: products, images,
+variants, prices, availability, shipping context, and checkout URLs. That gives
+AI agents a fresher and more actionable product surface, especially for facts
+that are hard to rank through web search snippets.
+
+UCP also exposes the next actions after discovery. Web search can point to a
+page, but it does not reliably tell an agent how to add the item to a cart,
+which buyer information is required, or when to hand the buyer to checkout. UCP
+responses can describe cart, checkout, status, and `continue_url` handoff steps
+as structured data.
+
+```mermaid
+flowchart LR
+    subgraph Web["Web search path"]
+        W1["AI agent"]
+        W2["Search engine index<br/>previously crawled pages"]
+        W3["Store pages<br/>human-readable content"]
+        W4["Agent infers product facts<br/>and guesses next actions"]
+        W1 --> W2 --> W3 --> W4
+    end
+
+    subgraph UCP["Shopify Catalog + UCP path"]
+        U1["AI agent"]
+        U2["Shopify Catalog API<br/>commerce search"]
+        U3["Product facts<br/>variants, images, price, availability"]
+        U4["Action data<br/>cart, checkout, continue_url"]
+        U1 --> U2 --> U3 --> U4
+    end
+```
+
+| Question | Web search / scraping | Shopify Catalog + UCP |
+|---|---|---|
+| What does the AI search first? | Crawled web pages selected by a search engine | Commerce data returned by Catalog |
+| How fresh is the data? | Depends on crawl timing and page parsing | Designed to surface current product and offer details |
+| Will store-level UCP support be noticed? | Not guaranteed during broad web search | Catalog and UCP are part of the agent's commerce path |
+| Are variants, inventory, and shipping fit visible? | Often hidden, stale, or hard to infer | Returned as structured product and offer data |
+| Can the AI take the next purchase action? | It has to inspect pages and guess buttons or forms | UCP exposes cart, checkout, status, and handoff steps |
+
 ## References
 
 - [Global Catalog MCP](https://shopify.dev/docs/agents/catalog/global-catalog)

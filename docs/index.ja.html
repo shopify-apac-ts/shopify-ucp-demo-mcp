@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UCP Demo Overview — Japanese</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f7f2;
+        --ink: #14201a;
+        --muted: #536259;
+        --line: #cad8ce;
+        --green: #008060;
+        --green-dark: #004c3f;
+        --lime: #95bf47;
+        --blue: #2f6f9f;
+        --amber: #c77700;
+        --paper: #ffffff;
+        --soft-green: #e6f2ea;
+        --soft-blue: #e8f1f7;
+        --soft-amber: #fbefd9;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        overflow-x: hidden;
+        background:
+          linear-gradient(180deg, rgba(0, 128, 96, 0.08), transparent 34%),
+          var(--bg);
+        color: var(--ink);
+      }
+
+      .page {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+      }
+
+      body:has(#comparison:target) main > .page:first-child {
+        display: none;
+      }
+
+      .slide {
+        width: min(1500px, 100%);
+        min-width: 0;
+        min-height: min(860px, calc(100vh - 32px));
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 16px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(0, 76, 63, 0.16);
+        box-shadow: 0 24px 70px rgba(20, 32, 26, 0.13);
+        padding: clamp(20px, 2.4vw, 36px);
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 24px;
+        align-items: end;
+      }
+
+      header > * {
+        min-width: 0;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--green);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 980px;
+        font-size: clamp(38px, 4.4vw, 64px);
+        line-height: 0.95;
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .subtitle {
+        margin: 14px 0 0;
+        max-width: 850px;
+        color: var(--muted);
+        font-size: clamp(17px, 1.35vw, 21px);
+        line-height: 1.36;
+        overflow-wrap: anywhere;
+      }
+
+      .demo-badge {
+        align-self: start;
+        min-width: 210px;
+        max-width: 100%;
+        border-left: 4px solid var(--lime);
+        padding: 12px 0 12px 16px;
+        color: var(--green-dark);
+        font-size: 16px;
+        font-weight: 750;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      .main-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        align-content: center;
+        min-width: 0;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px;
+        align-items: stretch;
+        position: relative;
+        min-width: 0;
+      }
+
+      .step {
+        position: relative;
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        gap: 10px;
+        min-height: 246px;
+        min-width: 0;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+      }
+
+      .step:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: -16px;
+        width: 22px;
+        height: 22px;
+        border-top: 3px solid var(--green);
+        border-right: 3px solid var(--green);
+        transform: translateY(-50%) rotate(45deg);
+        background: var(--paper);
+        z-index: 2;
+      }
+
+      .step-number {
+        width: 40px;
+        height: 40px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--green-dark);
+        color: white;
+        font-size: 18px;
+        font-weight: 850;
+      }
+
+      .step h2 {
+        margin: 0;
+        color: var(--ink);
+        font-size: clamp(19px, 1.55vw, 25px);
+        line-height: 1.08;
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .step p {
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(14px, 1vw, 16px);
+        line-height: 1.36;
+        overflow-wrap: anywhere;
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-content: end;
+      }
+
+      .chip {
+        border-radius: 999px;
+        padding: 6px 10px;
+        color: var(--green-dark);
+        background: var(--soft-green);
+        font-size: 12px;
+        font-weight: 750;
+        white-space: nowrap;
+      }
+
+      .step:nth-child(2) .chip,
+      .step:nth-child(4) .chip {
+        color: #254b69;
+        background: var(--soft-blue);
+      }
+
+      .step:nth-child(5) .chip {
+        color: #735000;
+        background: var(--soft-amber);
+      }
+
+      .comparison {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        align-items: stretch;
+      }
+
+      .path {
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+        gap: 14px;
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        padding: 22px;
+      }
+
+      .path.web {
+        border-top: 6px solid var(--amber);
+      }
+
+      .path.ucp {
+        border-top: 6px solid var(--green);
+      }
+
+      .path-label {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 850;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .path h2 {
+        margin: 0;
+        font-size: clamp(26px, 2.4vw, 38px);
+        line-height: 1.02;
+        letter-spacing: 0;
+      }
+
+      .path p {
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(16px, 1.25vw, 20px);
+        line-height: 1.36;
+      }
+
+      .path-flow {
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+
+      .path-node {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 12px;
+        align-items: start;
+        padding: 12px;
+        border-radius: 8px;
+        background: #f7faf8;
+      }
+
+      .node-mark {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--soft-amber);
+        color: #735000;
+        font-weight: 900;
+      }
+
+      .ucp .node-mark {
+        background: var(--soft-green);
+        color: var(--green-dark);
+      }
+
+      .path-node strong {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 16px;
+        line-height: 1.2;
+      }
+
+      .path-node span {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.32;
+      }
+
+      .impact-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .impact {
+        min-width: 0;
+        border-radius: 8px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid var(--line);
+      }
+
+      .impact strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--green-dark);
+        font-size: 17px;
+        line-height: 1.15;
+      }
+
+      .impact span {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.34;
+      }
+
+      .bridge {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        gap: 16px;
+        align-items: stretch;
+        min-width: 0;
+      }
+
+      .lane {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.82);
+        padding: 14px 18px;
+      }
+
+      .lane-mark {
+        width: 52px;
+        height: 52px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--soft-green);
+        color: var(--green-dark);
+        font-size: 28px;
+        font-weight: 900;
+      }
+
+      .lane:nth-child(2) .lane-mark {
+        background: var(--soft-amber);
+        color: #735000;
+      }
+
+      .lane h3 {
+        margin: 0 0 6px;
+        font-size: clamp(19px, 1.45vw, 23px);
+        line-height: 1.1;
+        overflow-wrap: anywhere;
+      }
+
+      .lane p {
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(14px, 1vw, 16px);
+        line-height: 1.38;
+        overflow-wrap: anywhere;
+      }
+
+      footer {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 20px;
+        align-items: center;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      footer strong {
+        color: var(--green-dark);
+      }
+
+      footer a {
+        color: var(--green-dark);
+        font-weight: 750;
+        text-decoration: none;
+      }
+
+      footer a:hover {
+        text-decoration: underline;
+      }
+
+      .source-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 12px;
+      }
+
+      @media (max-width: 1080px) {
+        .page {
+          padding: 16px;
+        }
+
+        .slide {
+          min-height: auto;
+        }
+
+        header,
+        .bridge,
+        .comparison,
+        .impact-row,
+        footer {
+          grid-template-columns: 1fr;
+        }
+
+        .flow {
+          grid-template-columns: 1fr;
+        }
+
+        .step {
+          min-height: auto;
+        }
+
+        .step:not(:last-child)::after {
+          top: auto;
+          right: 50%;
+          bottom: -14px;
+          transform: translateX(50%) rotate(135deg);
+        }
+
+        .source-links {
+          justify-content: flex-start;
+        }
+      }
+
+      @media (max-width: 640px) {
+        html,
+        body {
+          width: 390px;
+          max-width: 100vw;
+        }
+
+        .page {
+          display: block;
+          width: 390px;
+          max-width: 100vw;
+          padding: 12px;
+        }
+
+        .slide {
+          width: 100%;
+          padding: 20px;
+        }
+
+        h1 {
+          font-size: 34px;
+          line-height: 1;
+        }
+
+        .subtitle,
+        .demo-badge {
+          font-size: 15px;
+        }
+
+        .step,
+        .lane {
+          padding: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="page">
+        <section class="slide" aria-labelledby="page-title">
+        <header>
+          <div>
+            <p class="eyebrow">Universal Commerce Protocol overview</p>
+            <h1 id="page-title">チャットの相談がチェックアウトになるまで</h1>
+            <p class="subtitle">
+              UCPは、AIエージェントとマーチャントが共通の方法で商品を見つけ、
+              カートを準備し、支払い・確認が必要な場面では信頼できるチェックアウトへ
+              購入者を案内できるようにします。
+            </p>
+          </div>
+          <div class="demo-badge">
+            このリポジトリのdocsをもとにしたプレゼン用サマリー
+          </div>
+        </header>
+
+        <section class="main-grid" aria-label="Simplified UCP flow">
+          <div class="flow">
+            <article class="step">
+              <div class="step-number">1</div>
+              <h2>購入者がAIに相談する</h2>
+              <p>
+                商品カテゴリ、好み、予算、サイズ、色、配送先、商品画像などを
+                自然な言葉で伝えます。
+              </p>
+              <div class="chip-row">
+                <span class="chip">意図</span>
+                <span class="chip">配送先</span>
+                <span class="chip">好み</span>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">2</div>
+              <h2>AIがデモコネクターを使う</h2>
+              <p>
+                このMCPサーバーが、会話の内容をUCP向けの商品検索や
+                チェックアウト準備のリクエストに変換します。
+              </p>
+              <div class="chip-row">
+                <span class="chip">MCP</span>
+                <span class="chip">UCP profile</span>
+                <span class="chip">安全なtool呼び出し</span>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">3</div>
+              <h2>Shopify Catalogが候補を返す</h2>
+              <p>
+                Catalogは、購入者の条件に合う商品、画像、価格、バリアント、
+                配送可能なショップを返します。
+              </p>
+              <div class="chip-row">
+                <span class="chip">商品</span>
+                <span class="chip">バリアント</span>
+                <span class="chip">在庫</span>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">4</div>
+              <h2>カートまたはチェックアウトを準備する</h2>
+              <p>
+                購入者が選ぶと、マーチャント側のUCP endpointがカート、
+                合計、住所項目、次のチェックアウト状態を準備します。
+              </p>
+              <div class="chip-row">
+                <span class="chip">カート</span>
+                <span class="chip">購入者情報</span>
+                <span class="chip">状態</span>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">5</div>
+              <h2>購入者が信頼できる画面で完了する</h2>
+              <p>
+                支払い・確認が必要な場合、UCPはcontinue URLを返し、
+                購入者はShopify-hosted checkoutで購入を完了します。
+              </p>
+              <div class="chip-row">
+                <span class="chip">continue URL</span>
+                <span class="chip">支払い</span>
+                <span class="chip">注文</span>
+              </div>
+            </article>
+          </div>
+
+          <div class="bridge" aria-label="Key idea">
+            <article class="lane">
+              <div class="lane-mark">C</div>
+              <div>
+                <h3>Catalogは「何を買うべきか」に答える</h3>
+                <p>
+                  AIはShopifyマーチャントの商品を横断検索し、配送先で絞り込み、
+                  購入者を複数のストアへ移動させずに商品詳細を提示できます。
+                </p>
+              </div>
+            </article>
+
+            <article class="lane">
+              <div class="lane-mark">→</div>
+              <div>
+                <h3>Checkoutは「どこで安全に支払うか」に答える</h3>
+                <p>
+                  チェックアウトのルールはマーチャントが管理します。AIは入力補助と
+                  説明を行い、必要な場面で信頼できる支払い画面へ案内します。
+                </p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <footer>
+          <div>
+            <strong>要点:</strong> UCPは、商品情報・チェックアウト方針・支払いの信頼を
+            マーチャント側に保ったまま、AIが買い物体験を支援できるようにします。
+          </div>
+          <nav class="source-links" aria-label="Source documents">
+            <a href="sequence-diagram.md">sequence source</a>
+            <a href="escalation.md">escalation source</a>
+            <a href="tips.md">implementation tips</a>
+          </nav>
+        </footer>
+        </section>
+      </section>
+
+      <section class="page" id="comparison">
+        <section class="slide" aria-labelledby="comparison-title">
+        <header>
+          <div>
+            <p class="eyebrow">ウェブ検索 vs UCP検索</p>
+            <h1 id="comparison-title">CatalogでAIの商品発見はどう変わるか</h1>
+            <p class="subtitle">
+              UCPがない場合、AIは主に検索インデックス越しにウェブを見ます。
+              Shopify Catalogがあると、AIはコマースAPIを直接呼び、
+              商品情報と次に取るべき購入アクションを受け取れます。
+            </p>
+          </div>
+          <div class="demo-badge">
+            要点: 商品発見とチェックアウトが推測ではなく構造化される
+          </div>
+        </header>
+
+        <section class="main-grid" aria-label="Web search versus UCP search">
+          <div class="comparison">
+            <article class="path web">
+              <div class="path-label">UCPがない場合</div>
+              <h2>AIはクロール済みのウェブを検索する</h2>
+              <p>
+                AIが相手にするのは検索エンジンが事前にクロールしたページで、
+                商品情報はウェブページから推測する必要があります。
+              </p>
+              <div class="path-flow">
+                <div class="path-node">
+                  <div class="node-mark">1</div>
+                  <div>
+                    <strong>検索インデックスが入口</strong>
+                    <span>結果は過去にクロールされたページで、現在のストア状態とは限りません。</span>
+                  </div>
+                </div>
+                <div class="path-node">
+                  <div class="node-mark">2</div>
+                  <div>
+                    <strong>ストア単独対応だけでは不十分</strong>
+                    <span>AIがそのストアを直接開いたときだけ、UCP profileを見に行く可能性があります。</span>
+                  </div>
+                </div>
+                <div class="path-node">
+                  <div class="node-mark">3</div>
+                  <div>
+                    <strong>購入アクションが不明確</strong>
+                    <span>カート追加や個人情報を渡すチェックアウト手順は、機械可読に見えにくいです。</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="path ucp">
+              <div class="path-label">Shopify Catalog + UCPの場合</div>
+              <h2>AIはコマースを直接呼び出す</h2>
+              <p>
+                AIは検索結果をスクレイピングする代わりにCatalogを検索し、
+                商品データと次に実行できる手順を受け取ります。
+              </p>
+              <div class="path-flow">
+                <div class="path-node">
+                  <div class="node-mark">1</div>
+                  <div>
+                    <strong>Catalog APIが入口</strong>
+                    <span>商品、バリアント、画像、価格、在庫、配送条件を直接返せます。</span>
+                  </div>
+                </div>
+                <div class="path-node">
+                  <div class="node-mark">2</div>
+                  <div>
+                    <strong>AIに選ばれやすくなる</strong>
+                    <span>ウェブ検索では見えにくい在庫や配送可否が、AIにとって使える情報になります。</span>
+                  </div>
+                </div>
+                <div class="path-node">
+                  <div class="node-mark">3</div>
+                  <div>
+                    <strong>次のアクションが明示される</strong>
+                    <span>Catalog、cart、checkoutの応答が、AIが次に安全にできることを伝えます。</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="impact-row" aria-label="Why this matters">
+            <article class="impact">
+              <strong>より新しい商品情報</strong>
+              <span>検索スニペットやクロール済みページでは古くなりがちな商品情報を返せます。</span>
+            </article>
+            <article class="impact">
+              <strong>AIの選択精度向上</strong>
+              <span>在庫、バリアント、配送先適合性により、AIは推測を減らして提案できます。</span>
+            </article>
+            <article class="impact">
+              <strong>購入までの行動が明確</strong>
+              <span>ボタンを推測して探すのではなく、カート、チェックアウト、handoffの手順が示されます。</span>
+            </article>
+          </div>
+        </section>
+
+        <footer>
+          <div>
+            <strong>要点:</strong> ウェブ検索はページを見つけるもの。
+            UCPは商品と次のコマースアクションをAIに渡すものです。
+          </div>
+          <nav class="source-links" aria-label="Source documents">
+            <a href="tips.md#web-search-vs-ucp-search">tips source</a>
+            <a href="index.html">English version</a>
+          </nav>
+        </footer>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

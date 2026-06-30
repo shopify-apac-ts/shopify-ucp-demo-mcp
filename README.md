@@ -225,6 +225,7 @@ For Claude mobile app via Claude web Custom Connector:
    ```
 6. Save the connector, then open Claude mobile app and select it from the
    connector list before asking product discovery or checkout questions.
+   [Check Demo](../../wiki#demo).
 
 For Claude Code (CLI):
 

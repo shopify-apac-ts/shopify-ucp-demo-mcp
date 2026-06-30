@@ -221,9 +221,22 @@ claude mcp add shopify-ucp --transport http https://your-app-name.onrender.com/m
 
 ## Demo
 
-See the [Wiki](../../wiki) for a video walkthrough using the prompt:
+See the [Wiki](../../wiki) for a video walkthrough of Claude mobile using this
+server as a custom connector. The demo starts with this prompt:
 
-> **American-made jeans available in Tokyo.**
+> **中年男性向けの夏のシャツをUCPで探して**
+
+The video then continues with follow-up prompts for product images, item
+selection, variant selection, shipping details, and checkout handoff:
+
+```text
+商品画像
+リネンシャツ
+ブラックM
+名前は山田太郎、メールアドレスは test@example.com 配送先は東京都のWeWork アイスバーグで。
+1F, 6丁目-12-18 神宮前 渋谷区 東京都 150-0001
+氏名は山田太郎、電話番号は、09012345678
+```
 
 ## Example conversation
 

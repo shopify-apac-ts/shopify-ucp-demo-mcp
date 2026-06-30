@@ -4,6 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>UCP概要</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
         color-scheme: light;
@@ -96,6 +102,60 @@
         font-size: clamp(16px, 1.24vw, 20px);
         line-height: 1.45;
         overflow-wrap: anywhere;
+      }
+
+      .icon-badge {
+        width: 40px;
+        height: 40px;
+        display: inline-grid;
+        flex: 0 0 40px;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--soft-green);
+        color: var(--green-dark);
+        line-height: 1;
+      }
+
+      .icon-badge svg {
+        width: 25px;
+        height: 25px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2.1;
+      }
+
+      .icon-badge .filled {
+        fill: currentColor;
+        stroke: none;
+      }
+
+      .icon-badge.browser,
+      .icon-badge.money {
+        background: var(--soft-amber);
+        color: var(--amber-dark);
+      }
+
+      .icon-badge.buyer {
+        background: var(--soft-blue);
+        color: var(--blue-dark);
+      }
+
+      .hub-title,
+      .icon-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .hub-title {
+        justify-content: center;
+      }
+
+      .icon-title {
+        align-items: flex-start;
       }
 
       .main-grid {
@@ -296,6 +356,14 @@
         line-height: 1.12;
       }
 
+      .lane .icon-title {
+        margin-bottom: 8px;
+      }
+
+      .lane .icon-title strong {
+        margin-bottom: 0;
+      }
+
       .lane p {
         margin: 0;
         color: var(--muted);
@@ -368,6 +436,10 @@
         letter-spacing: 0;
       }
 
+      .zone .icon-title h2 {
+        margin: 0;
+      }
+
       .zone p,
       .conversion-box p {
         margin: 0;
@@ -411,6 +483,15 @@
         color: var(--green-dark);
         font-size: 18px;
         line-height: 1.15;
+      }
+
+      .actor .icon-title {
+        align-items: center;
+        margin-bottom: 5px;
+      }
+
+      .actor .icon-title strong {
+        margin: 0;
       }
 
       .actor span {
@@ -678,6 +759,39 @@
   </head>
   <body>
     <main>
+      <svg class="svg-sprite" aria-hidden="true" style="display: none">
+        <symbol id="icon-robot" viewBox="0 0 24 24">
+          <path d="M12 3v3"></path>
+          <path d="M8 3h8"></path>
+          <rect x="5" y="7" width="14" height="12" rx="3"></rect>
+          <path d="M5 12H3"></path>
+          <path d="M21 12h-2"></path>
+          <circle class="filled" cx="9" cy="12" r="1.3"></circle>
+          <circle class="filled" cx="15" cy="12" r="1.3"></circle>
+          <path d="M9 16h6"></path>
+        </symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="6.5"></circle>
+          <path d="m16 16 4 4"></path>
+        </symbol>
+        <symbol id="icon-money" viewBox="0 0 24 24">
+          <path d="M9 6h6l-1.5-3h-3L9 6Z"></path>
+          <path d="M6 19c0-5 3-10 6-10s6 5 6 10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z"></path>
+          <path d="M12 12v6"></path>
+          <path d="M10 14h4"></path>
+          <path d="M10 16h4"></path>
+        </symbol>
+        <symbol id="icon-browser" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+          <path d="M3 9h18"></path>
+          <circle class="filled" cx="7" cy="6.5" r="0.9"></circle>
+          <circle class="filled" cx="10" cy="6.5" r="0.9"></circle>
+        </symbol>
+        <symbol id="icon-buyer" viewBox="0 0 24 24">
+          <circle cx="12" cy="8" r="4"></circle>
+          <path d="M4 21c1.8-4 5-6 8-6s6.2 2 8 6"></path>
+        </symbol>
+      </svg>
       <section class="page" id="journey">
         <section class="slide" aria-labelledby="page-title">
           <header>
@@ -712,7 +826,12 @@
                 </svg>
 
                 <div class="agent-hub">
-                  <strong>AI Agentとの会話</strong>
+                  <div class="hub-title">
+                    <span class="icon-badge" aria-hidden="true">
+                      <svg><use href="#icon-robot"></use></svg>
+                    </span>
+                    <strong>AI Agentとの会話</strong>
+                  </div>
                   <span>会話のたびに、検索、詳細取得、カート更新、チェックアウト処理のtool呼び出しが起きます。</span>
                 </div>
 
@@ -763,7 +882,12 @@
 
               <div class="side-panel">
                 <article class="lane catalog">
-                  <strong>Catalogは「何を買うべきか」に答える</strong>
+                  <div class="icon-title">
+                    <span class="icon-badge" aria-hidden="true">
+                      <svg><use href="#icon-search"></use></svg>
+                    </span>
+                    <strong>Catalogは「何を買うべきか」に答える</strong>
+                  </div>
                   <p>
                     AgentはShopify上のマーチャントを横断して検索し、配送先に合う商品や
                     バリアントを、購入者が複数のストアを巡回する前に提示できます。
@@ -771,7 +895,12 @@
                 </article>
 
                 <article class="lane checkout">
-                  <strong>Checkoutは「どこで安全に支払うか」に答える</strong>
+                  <div class="icon-title">
+                    <span class="icon-badge money" aria-hidden="true">
+                      <svg><use href="#icon-money"></use></svg>
+                    </span>
+                    <strong>Checkoutは「どこで安全に支払うか」に答える</strong>
+                  </div>
                   <p>
                     チェックアウトのルールと決済の信頼はマーチャント側に残ります。
                     Agentは入力補助を行い、確認や支払いが必要な時点で安全に引き継ぎます。
@@ -807,7 +936,12 @@
             <div class="market-map">
               <article class="zone">
                 <div class="map-label">Agentの外側</div>
-                <h2>検索の世界</h2>
+                <div class="icon-title">
+                  <span class="icon-badge browser" aria-hidden="true">
+                    <svg><use href="#icon-browser"></use></svg>
+                  </span>
+                  <h2>ブラウザ検索の世界</h2>
+                </div>
                 <p>
                   購入者がAIとの購買会話に入る前は、SEO、広告、クロール済みページが
                   露出に大きく影響します。
@@ -823,12 +957,22 @@
               <section class="agent-box" aria-label="AI agent branch">
                 <div class="buyer-agent">
                   <div class="actor">
-                    <strong>購入者</strong>
+                    <div class="icon-title">
+                      <span class="icon-badge buyer" aria-hidden="true">
+                        <svg><use href="#icon-buyer"></use></svg>
+                      </span>
+                      <strong>購入者</strong>
+                    </div>
                     <span>自然言語で相談し、比較し、条件を変えながら意思決定します。</span>
                   </div>
                   <div class="arrow" aria-hidden="true">→</div>
                   <div class="actor agent-node">
-                    <strong>AI Agentとの会話</strong>
+                    <div class="icon-title">
+                      <span class="icon-badge" aria-hidden="true">
+                        <svg><use href="#icon-robot"></use></svg>
+                      </span>
+                      <strong>AI Agentとの会話</strong>
+                    </div>
                     <span>推薦ループの内側では広告の影響が弱まり、tool呼び出しの質が重要になります。</span>
                   </div>
                 </div>

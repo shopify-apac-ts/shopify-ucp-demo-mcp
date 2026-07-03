@@ -175,8 +175,12 @@ ucp catalog get_product AbC123XyZ \
 Expected: Catalog returns `product.variants[]` with seller, price,
 availability, options, PDP URL, and `checkout_url` data for the requested
 variant. This sample's `get_product_details` wrapper keeps the buyer-facing
-response concise: when `color` or `size` is supplied, it locally prioritizes
-matching offers and displays at most three of them for mobile clients.
+response concise: when generic `options` selections (or the legacy `color` /
+`size` shortcuts) are supplied, it locally prioritizes matching offers and
+displays at most three of them for mobile clients. Shopify option names are
+merchant-defined, so the wrapper does not hardcode translated option-name
+aliases. In the raw UCP CLI example above, replace `Color` and `Size` with the
+exact option names returned by Catalog for the product you are testing.
 
 ### 4.4 `discover` — what does this merchant actually offer?
 

@@ -43,6 +43,16 @@ Every outgoing call carries `meta.ucp-agent.profile` (see `UCP_AGENT_PROFILE` be
 Calls that mutate state (`cancel_cart`, `complete_checkout`, `cancel_checkout`) also carry
 `meta.idempotency-key` so retries are safe.
 
+### Product option selection
+
+Shopify product option names are merchant-defined, so `get_product_details`
+accepts a generic `options` array for selections such as `Color`, `Style`,
+`Material`, `カラー`, or any other Catalog-returned option name. The older
+`color` and `size` arguments remain as convenience shortcuts, but the server
+does not hardcode translated option-name aliases. If option names do not match,
+the response formatter falls back to exact option-value matching and shows the
+closest offers instead of guessing.
+
 ### Image similarity search
 
 `search_products` supports Shopify Global Catalog similarity search by accepting

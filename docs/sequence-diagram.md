@@ -20,11 +20,11 @@ sequenceDiagram
 
     M->>C: POST /api/ucp/mcp · tools/call: search_catalog<br/>{catalog: {query, context, filters, pagination}}
     C-->>M: {products: [{id, title, options, price_range,<br/>variants[], media[], url}]}
-    M-->>A: Found N products — titles, prices,<br/>options (size/color), Base62 UPIDs
+    M-->>A: Found N products — titles, prices,<br/>merchant-defined options, Base62 UPIDs
 
     Note over A,K: 3. Product Detail
 
-    A->>M: tools/call: get_product_details<br/>{upid, ships_to, color, size}
+    A->>M: tools/call: get_product_details<br/>{upid, ships_to, options[]}
     M->>T: (use cached token or refresh)
     M->>C: POST /api/ucp/mcp · tools/call: get_product<br/>{catalog: {id, selected, filters}}
     C-->>M: {product: {id, description, options,<br/>variants: [{checkout_url, seller, price, availability}]}}

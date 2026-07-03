@@ -155,11 +155,6 @@ type DetailOfferSelection = {
   matchedRequestedOptions: boolean;
 };
 
-const OPTION_NAME_ALIASES: Record<string, string[]> = {
-  color: ['color', 'colour', 'カラー', '色'],
-  size: ['size', 'サイズ', '寸法'],
-};
-
 function normalizeOptionText(value: unknown): string {
   if (value == null) return '';
   return String(value)
@@ -171,11 +166,7 @@ function normalizeOptionText(value: unknown): string {
 function optionNameMatches(actualName: unknown, requestedName: unknown): boolean {
   const actualNorm = normalizeOptionText(actualName);
   const requestedNorm = normalizeOptionText(requestedName);
-  if (!actualNorm || !requestedNorm) return false;
-  if (actualNorm === requestedNorm) return true;
-
-  const aliases = OPTION_NAME_ALIASES[requestedNorm] ?? [];
-  return aliases.some((alias) => normalizeOptionText(alias) === actualNorm);
+  return Boolean(actualNorm && requestedNorm && actualNorm === requestedNorm);
 }
 
 function optionValuePieces(value: unknown): string[] {
@@ -265,7 +256,7 @@ function offerMatchesRequestedOption(offer: Record<string, unknown>, requested: 
   }
 
   // Some Catalog variants only expose displayName/title text. Use it as a
-  // last-resort match so selected Color/Size can still reduce mobile output.
+  // last-resort match so requested option values can still reduce mobile output.
   return fallbackText
     ? requested.values.some((requestedValue) => optionValueMatches(fallbackText, requestedValue))
     : false;
@@ -297,8 +288,9 @@ function partialDetailOffersForDisplay(
     selected.push(offer);
   };
 
-  // Preserve coverage across requested dimensions. For Color+Size misses, this
-  // surfaces one color match and one size match instead of only the first color.
+  // Preserve coverage across requested dimensions. For multi-option misses,
+  // this surfaces one candidate per requested option instead of only the first
+  // repeated match.
   for (const requested of requestedOptions) {
     addOffer(offers.find((offer) => offerMatchesRequestedOption(offer, requested)));
   }
@@ -577,7 +569,7 @@ export function createMcpServer(): McpServer {
       'Trigger keywords (English/Japanese): "buy", "shop", "looking for", "find me", "browse", "compare prices", "in stock", "買う", "買いたい", "ショッピング", "探している", "欲しい", "比較したい". Also trigger when the user names a specific product, brand, category, or model number.',
       'Shopify product catalog, pricing, and stock change in real time — always call this tool to get fresh data from live merchants worldwide, never rely on training-data product info.',
       '',
-      'Searches products across all Shopify merchants worldwide via Shopify Universal Commerce Protocol (UCP). Returns titles, prices, ratings, options (size/color), checkout URLs, and product images when available.',
+      'Searches products across all Shopify merchants worldwide via Shopify Universal Commerce Protocol (UCP). Returns titles, prices, ratings, merchant-defined product options, checkout URLs, and product images when available.',
       'Supports text search and image similarity search. For image similarity, pass image_base64 plus image_content_type, or pass image_url and this server will fetch and encode it; still include buyer context and ships_to.',
       '',
       'LOCATION RULES (critical — follow before calling this tool):',
@@ -588,7 +580,7 @@ export function createMcpServer(): McpServer {
       'CONTEXT RULES (critical — richer context = better results):',
       'Always include: buyer location, product origin if mentioned, style/quality preferences, brand expectations, and any other details from the conversation.',
       'Examples: "buyer in Tokyo looking for authentic American denim brands, premium quality, ships from US"; "buyer in Paris seeking organic Japanese skincare, natural ingredients".',
-      'Returns product list with titles, prices, ratings, options (size/color), and checkout URLs.',
+      'Returns product list with titles, prices, ratings, merchant-defined product options, and checkout URLs.',
       'NAME-BASED ADDRESSING (important for buyer conversation):',
       'Each result carries an internal product_id in an HTML comment — do NOT show it to the buyer or ask them to quote it. When asking the buyer to pick a product, refer to it by its title only (e.g. "Would you like the Levi\'s 501 or the Wrangler Cowboy Cut?"). Look up the matching product_id yourself when you call get_product_details.',
     ].join('\n'),
@@ -680,7 +672,7 @@ export function createMcpServer(): McpServer {
       '**USE THIS TOOL whenever the buyer wants more info on a product from a prior search_products result, or before create_checkout to obtain the variant_id, currency, and shop_domain.**',
       'Trigger phrases: "tell me more about X", "what sizes / colors are available", "show me variants", "show details", "詳細を見せて", "サイズは？", "色は何がある？", "在庫はある？", as well as any time the buyer picks a specific item to purchase.',
       '',
-      'Returns variant options, availability, pricing, and per-shop checkout URLs for the selected product. When color or size is provided, the response is narrowed to the best matching offers and capped for mobile clients.',
+      'Returns variant options, availability, pricing, and per-shop checkout URLs for the selected product. When option selections are provided, the response is narrowed to the best matching offers and capped for mobile clients.',
       'NAME → ID LOOKUP: The buyer will refer to the product by its title (e.g. "the first one", "the Levi\'s 501"). Match that to the corresponding entry in your previous search_products result and pass that entry\'s internal product_id (the Base62 value in the HTML comment) as upid. Never ask the buyer to provide an ID.',
       'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call so only offers that ship to the buyer\'s country are shown.',
       'Do NOT pass available_for_sale — the tool shows variant availability status so the buyer can choose.',
@@ -689,12 +681,19 @@ export function createMcpServer(): McpServer {
       upid: z.string().describe('Universal Product ID (Base62) — read from the HTML comment in the previous search_products result; never ask the buyer for it'),
       context: z.string().optional().describe("Buyer context including location, e.g. 'buyer in Tokyo, Japan looking for size M in yellow'"),
       ships_to: z.string().optional().describe('2-letter ISO country code — MUST match the ships_to used in search_products (e.g. "JP", "US")'),
-      color: z.string().optional().describe('Preferred color option'),
-      size: z.string().optional().describe('Preferred size option'),
+      options: z.array(z.object({
+        name: z.string().describe('Product option name exactly as shown by Catalog, e.g. "Color", "Style", "Material", "カラー", or "サイズ"'),
+        value: z.string().describe('Requested option value / label, e.g. "Black", "Silk", "us8 / 25cm"'),
+      })).optional().describe('Arbitrary product option selections. Prefer this over color/size when the product option names are known.'),
+      color: z.string().optional().describe('Legacy convenience shortcut for a preferred color value. Use options when the Catalog option name is known.'),
+      size: z.string().optional().describe('Legacy convenience shortcut for a preferred size value. Use options when the Catalog option name is known.'),
     },
-    async ({ upid, context, ships_to, color, size }) => {
+    async ({ upid, context, ships_to, options, color, size }) => {
       const startedAt = Date.now();
       const product_options: Array<{ key: string; values: string[] }> = [];
+      for (const option of options ?? []) {
+        product_options.push({ key: option.name, values: [option.value] });
+      }
       if (color) product_options.push({ key: 'Color', values: [color] });
       if (size) product_options.push({ key: 'Size', values: [size] });
 

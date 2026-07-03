@@ -169,8 +169,11 @@ ucp catalog get_product AbC123XyZ \
   --view :compact
 ```
 
-Expected: `product.variants[]` contains seller, price, availability, options,
-PDP URL, and `checkout_url` data for the requested variant.
+Expected: Catalog returns `product.variants[]` with seller, price,
+availability, options, PDP URL, and `checkout_url` data for the requested
+variant. This sample's `get_product_details` wrapper keeps the buyer-facing
+response concise: when `color` or `size` is supplied, it locally prioritizes
+matching offers and displays at most three of them for mobile clients.
 
 ### 4.4 `discover` — what does this merchant actually offer?
 

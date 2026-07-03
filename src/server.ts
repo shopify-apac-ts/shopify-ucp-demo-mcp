@@ -19,6 +19,9 @@ import {
   UcpNotSupportedError,
 } from './checkout.js';
 
+const MAX_SELECTED_DETAIL_OFFERS = 3;
+const MAX_UNSELECTED_DETAIL_OFFERS = 8;
+
 // Extract currency code from a price object — API uses both 'currencyCode' and 'currency'
 function getCurrency(price: Record<string, unknown>): string {
   return (price.currencyCode ?? price.currency ?? '') as string;
@@ -107,6 +110,225 @@ function variantsOrProducts(product: Record<string, unknown>): Record<string, un
   const products = (product.products as Record<string, unknown>[] | undefined) ?? [];
   const variants = (product.variants as Record<string, unknown>[] | undefined) ?? [];
   return products.length > 0 ? products : variants;
+}
+
+type RequestedOption = { key: string; values: string[] };
+type DetailOfferSelection = {
+  displayedOffers: Record<string, unknown>[];
+  sourceOfferCount: number;
+  matchingOfferCount: number;
+  partialOfferCount: number;
+  hiddenOfferCount: number;
+  usedOptionFilter: boolean;
+  matchedRequestedOptions: boolean;
+};
+
+const OPTION_NAME_ALIASES: Record<string, string[]> = {
+  color: ['color', 'colour', 'カラー', '色'],
+  size: ['size', 'サイズ', '寸法'],
+};
+
+function normalizeOptionText(value: unknown): string {
+  if (value == null) return '';
+  return String(value)
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[^\p{Letter}\p{Number}]+/gu, '');
+}
+
+function optionNameMatches(actualName: unknown, requestedName: unknown): boolean {
+  const actualNorm = normalizeOptionText(actualName);
+  const requestedNorm = normalizeOptionText(requestedName);
+  if (!actualNorm || !requestedNorm) return false;
+  if (actualNorm === requestedNorm) return true;
+
+  const aliases = OPTION_NAME_ALIASES[requestedNorm] ?? [];
+  return aliases.some((alias) => normalizeOptionText(alias) === actualNorm);
+}
+
+function optionValuePieces(value: unknown): string[] {
+  if (value == null) return [];
+  return String(value)
+    .split(/[\/,|;]+/)
+    .map((piece) => normalizeOptionText(piece))
+    .filter(Boolean);
+}
+
+function hasNumber(value: string): boolean {
+  return /\p{Number}/u.test(value);
+}
+
+function optionValueMatches(actual: unknown, requested: unknown): boolean {
+  const actualNorm = normalizeOptionText(actual);
+  const requestedNorm = normalizeOptionText(requested);
+  if (!actualNorm || !requestedNorm) return false;
+  if (actualNorm === requestedNorm) return true;
+
+  if (requestedNorm.includes(actualNorm)) return true;
+  if (!hasNumber(actualNorm) && !hasNumber(requestedNorm) && actualNorm.includes(requestedNorm)) {
+    return true;
+  }
+
+  const actualPieces = optionValuePieces(actual);
+  const requestedPieces = optionValuePieces(requested);
+  return actualPieces.some((actualPiece) =>
+    requestedPieces.some((requestedPiece) => {
+      if (actualPiece === requestedPiece) return true;
+      if (requestedPiece.includes(actualPiece)) return true;
+      return !hasNumber(actualPiece) && !hasNumber(requestedPiece) && actualPiece.includes(requestedPiece);
+    })
+  );
+}
+
+function optionEntriesFrom(record: Record<string, unknown> | undefined): Array<{ name?: string; value: unknown }> {
+  if (!record) return [];
+  const entries: Array<{ name?: string; value: unknown }> = [];
+
+  for (const key of ['options', 'selectedOptions', 'selected_options']) {
+    const options = record[key];
+    if (!Array.isArray(options)) continue;
+    for (const option of options) {
+      if (!option || typeof option !== 'object') continue;
+      const item = option as Record<string, unknown>;
+      const name = item.name ?? item.key ?? item.optionName ?? item.option_name;
+      const value = item.label ?? item.value ?? item.optionValue ?? item.option_value;
+      if (value != null) {
+        entries.push({
+          ...(typeof name === 'string' && { name }),
+          value,
+        });
+      }
+    }
+  }
+
+  return entries;
+}
+
+function displayTextFromOffer(offer: Record<string, unknown>): string {
+  const selectedVariant = offer.selectedProductVariant as Record<string, unknown> | undefined;
+  return [
+    offer.displayName,
+    offer.title,
+    selectedVariant?.displayName,
+    selectedVariant?.title,
+  ].filter((value): value is string => typeof value === 'string').join(' ');
+}
+
+function offerMatchesRequestedOption(offer: Record<string, unknown>, requested: RequestedOption): boolean {
+  const selectedVariant = offer.selectedProductVariant as Record<string, unknown> | undefined;
+  const entries = [
+    ...optionEntriesFrom(selectedVariant),
+    ...optionEntriesFrom(offer),
+  ];
+  const fallbackText = displayTextFromOffer(offer);
+
+  const namedEntries = entries.filter((entry) => optionNameMatches(entry.name, requested.key));
+  const candidateEntries = namedEntries.length > 0 ? namedEntries : entries;
+  const candidateValues = candidateEntries.map((entry) => entry.value);
+
+  if (candidateValues.some((candidate) =>
+    requested.values.some((requestedValue) => optionValueMatches(candidate, requestedValue))
+  )) {
+    return true;
+  }
+
+  // Some Catalog variants only expose displayName/title text. Use it as a
+  // last-resort match so selected Color/Size can still reduce mobile output.
+  return fallbackText
+    ? requested.values.some((requestedValue) => optionValueMatches(fallbackText, requestedValue))
+    : false;
+}
+
+function requestedOptionMatchCount(offer: Record<string, unknown>, requestedOptions: RequestedOption[]): number {
+  return requestedOptions.filter((requested) => offerMatchesRequestedOption(offer, requested)).length;
+}
+
+function offerMatchesRequestedOptions(offer: Record<string, unknown>, requestedOptions: RequestedOption[]): boolean {
+  if (requestedOptions.length === 0) return true;
+  return requestedOptionMatchCount(offer, requestedOptions) === requestedOptions.length;
+}
+
+function requestedOptionsText(requestedOptions: RequestedOption[]): string {
+  return requestedOptions
+    .map((option) => `${option.key}: ${option.values.join(' / ')}`)
+    .join(', ');
+}
+
+function partialDetailOffersForDisplay(
+  offers: Record<string, unknown>[],
+  requestedOptions: RequestedOption[],
+  limit: number
+): Record<string, unknown>[] {
+  const selected: Record<string, unknown>[] = [];
+  const addOffer = (offer: Record<string, unknown> | undefined) => {
+    if (!offer || selected.includes(offer) || selected.length >= limit) return;
+    selected.push(offer);
+  };
+
+  // Preserve coverage across requested dimensions. For Color+Size misses, this
+  // surfaces one color match and one size match instead of only the first color.
+  for (const requested of requestedOptions) {
+    addOffer(offers.find((offer) => offerMatchesRequestedOption(offer, requested)));
+  }
+
+  const ranked = offers
+    .map((offer, index) => ({ offer, index, score: requestedOptionMatchCount(offer, requestedOptions) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+
+  for (const item of ranked) addOffer(item.offer);
+  for (const offer of offers) addOffer(offer);
+
+  return selected;
+}
+
+function selectDetailOffersForDisplay(
+  offers: Record<string, unknown>[],
+  requestedOptions: RequestedOption[]
+): DetailOfferSelection {
+  const hasRequestedOptions = requestedOptions.length > 0;
+  const limit = hasRequestedOptions ? MAX_SELECTED_DETAIL_OFFERS : MAX_UNSELECTED_DETAIL_OFFERS;
+  const matchingOffers = hasRequestedOptions
+    ? offers.filter((offer) => offerMatchesRequestedOptions(offer, requestedOptions))
+    : offers;
+  const partialOfferCount = hasRequestedOptions
+    ? offers.filter((offer) => requestedOptionMatchCount(offer, requestedOptions) > 0).length
+    : offers.length;
+  const matchedRequestedOptions = !hasRequestedOptions || matchingOffers.length > 0;
+  const sourceOffers = hasRequestedOptions && matchingOffers.length > 0 ? matchingOffers : offers;
+  const displayedOffers = hasRequestedOptions && matchingOffers.length === 0
+    ? partialDetailOffersForDisplay(offers, requestedOptions, limit)
+    : sourceOffers.slice(0, limit);
+
+  return {
+    displayedOffers,
+    sourceOfferCount: offers.length,
+    matchingOfferCount: matchingOffers.length,
+    partialOfferCount,
+    hiddenOfferCount: Math.max(0, sourceOffers.length - displayedOffers.length),
+    usedOptionFilter: hasRequestedOptions,
+    matchedRequestedOptions,
+  };
+}
+
+function detailOfferSelectionNote(selection: DetailOfferSelection, requestedOptions: RequestedOption[]): string {
+  if (selection.usedOptionFilter) {
+    const requested = requestedOptionsText(requestedOptions);
+    if (selection.matchedRequestedOptions) {
+      const hidden = selection.hiddenOfferCount > 0 ? ` ${selection.hiddenOfferCount} more matching offer(s) were omitted to keep the mobile response concise.` : '';
+      return `\nMatched requested options (${requested}). Showing ${selection.displayedOffers.length} of ${selection.matchingOfferCount} matching offer(s).${hidden}`;
+    }
+    if (selection.partialOfferCount > 0) {
+      return `\nCould not find one offer matching all requested options (${requested}). Showing ${selection.displayedOffers.length} closest Catalog-returned offer(s) that match at least part of the request; ask the buyer to confirm before checkout.`;
+    }
+    return `\nCould not find offers matching the requested options (${requested}). Showing ${selection.displayedOffers.length} Catalog-returned offer(s); ask the buyer to confirm before checkout.`;
+  }
+
+  if (selection.hiddenOfferCount > 0) {
+    return `\nShowing ${selection.displayedOffers.length} of ${selection.sourceOfferCount} returned offer(s) to keep the mobile response concise.`;
+  }
+
+  return '';
 }
 
 // Decorate the buyer-facing continue_url before handing it to the AI:
@@ -364,6 +586,7 @@ export function createMcpServer(): McpServer {
       limit: z.number().optional().describe('Number of results (default: 5, max: 20)'),
     },
     async ({ query, context, image_base64, image_content_type, image_url, ships_to, ships_from, available_for_sale, price_min, price_max, limit }) => {
+      const startedAt = Date.now();
       if (!query && !image_base64 && !image_url) {
         throw new Error('search_products requires either query, image_base64, or image_url');
       }
@@ -408,6 +631,7 @@ export function createMcpServer(): McpServer {
         ? `Found ${lines.length} product(s):\n\n${lines.join('\n\n')}`
         : 'No products found for this query.';
 
+      console.error(`[server] search_products completed: offers=${offers.length} has_image=${Boolean(image)} text_chars=${text.length} duration_ms=${Date.now() - startedAt}`);
       return { content: [{ type: 'text', text }] };
     }
   );
@@ -421,10 +645,10 @@ export function createMcpServer(): McpServer {
       '**USE THIS TOOL whenever the buyer wants more info on a product from a prior search_products result, or before create_checkout to obtain the variant_id, currency, and shop_domain.**',
       'Trigger phrases: "tell me more about X", "what sizes / colors are available", "show me variants", "show details", "詳細を見せて", "サイズは？", "色は何がある？", "在庫はある？", as well as any time the buyer picks a specific item to purchase.',
       '',
-      'Returns all variants, sizes, colors, pricing, and per-shop checkout URLs for the selected product.',
+      'Returns variant options, availability, pricing, and per-shop checkout URLs for the selected product. When color or size is provided, the response is narrowed to the best matching offers and capped for mobile clients.',
       'NAME → ID LOOKUP: The buyer will refer to the product by its title (e.g. "the first one", "the Levi\'s 501"). Match that to the corresponding entry in your previous search_products result and pass that entry\'s internal product_id (the Base62 value in the HTML comment) as upid. Never ask the buyer to provide an ID.',
       'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call so only offers that ship to the buyer\'s country are shown.',
-      'Do NOT pass available_for_sale — the tool shows all variants with their availability status so the buyer can choose.',
+      'Do NOT pass available_for_sale — the tool shows variant availability status so the buyer can choose.',
     ].join('\n'),
     {
       upid: z.string().describe('Universal Product ID (Base62) — read from the HTML comment in the previous search_products result; never ask the buyer for it'),
@@ -434,6 +658,7 @@ export function createMcpServer(): McpServer {
       size: z.string().optional().describe('Preferred size option'),
     },
     async ({ upid, context, ships_to, color, size }) => {
+      const startedAt = Date.now();
       const product_options: Array<{ key: string; values: string[] }> = [];
       if (color) product_options.push({ key: 'Color', values: [color] });
       if (size) product_options.push({ key: 'Size', values: [size] });
@@ -467,6 +692,9 @@ export function createMcpServer(): McpServer {
         usedFallback = true;
       }
 
+      const selection = selectDetailOffersForDisplay(perShopOffers, product_options);
+      const displayOffers = selection.displayedOffers;
+
       const formatOffer = (offer: Record<string, unknown>, i: number): string => {
         const hasShop = Boolean(offer.shop);
         const shop = hasShop ? ((offer.shop as Record<string, unknown> | undefined) ?? {}) : {};
@@ -498,7 +726,7 @@ export function createMcpServer(): McpServer {
         ].filter(Boolean).join('\n');
       };
 
-      const lines = perShopOffers.map((offer, i) => formatOffer(offer, i));
+      const lines = displayOffers.map((offer, i) => formatOffer(offer, i));
 
       // Product-level options (all available variants)
       const productOptions = (product.options as Array<{ name: string; values: Array<{ value?: string; label?: string; availableForSale?: boolean; availability?: { available?: boolean } }> }> | undefined) ?? [];
@@ -524,10 +752,12 @@ export function createMcpServer(): McpServer {
         : (descriptionText(product.description, 60) || upid);
 
       const shippingNote = usedFallback
-        ? `\n⚠️ No offers found shipping to ${ships_to}. Showing all available offers globally:`
+        ? `\n⚠️ No offers found shipping to ${ships_to}. Catalog fallback returned ${perShopOffers.length} global offer(s):`
         : ships_to
-        ? `\nAvailable at ${perShopOffers.length} shop(s) shipping to ${ships_to}:`
-        : `\nAvailable at ${perShopOffers.length} shop(s):`;
+        ? `\nCatalog returned ${perShopOffers.length} offer(s) shipping to ${ships_to}:`
+        : `\nCatalog returned ${perShopOffers.length} offer(s):`;
+
+      const selectionNote = detailOfferSelectionNote(selection, product_options);
 
       const header = [
         `**${productTitle}**`,
@@ -537,6 +767,7 @@ export function createMcpServer(): McpServer {
         descriptionText(product.description, 300),
         optionSummary ? `\n${optionSummary}` : '',
         topFeatures.length > 0 ? `\nFeatures:\n${topFeatures.map((f) => `• ${f}`).join('\n')}` : '',
+        selectionNote,
         shippingNote,
       ].filter(Boolean).join('\n');
 
@@ -552,6 +783,7 @@ export function createMcpServer(): McpServer {
         ? `${header}\n\n${lines.join('\n\n')}`
         : `Product found but no shop offers returned. This may be a temporary API issue. UPID: ${upid}`;
 
+      console.error(`[server] get_product_details completed: upid=${extractBase62(upid)} raw_offers=${perShopOffers.length} displayed_offers=${lines.length} matching_offers=${selection.matchingOfferCount} partial_offers=${selection.partialOfferCount} selected_options=${product_options.length} used_shipping_fallback=${usedFallback} text_chars=${text.length} duration_ms=${Date.now() - startedAt}`);
       return { content: [{ type: 'text', text }] };
     }
   );

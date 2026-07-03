@@ -57,6 +57,7 @@ async function parseResponse(response: Response): Promise<unknown> {
 // ~390ms with no mcp-session-id header. Skipping initialize halves the
 // round-trips per user request.
 async function callCatalogMcp(toolName: string, args: Record<string, unknown>) {
+  const startedAt = Date.now();
   const token = await getBearerToken();
 
   const argsWithMeta: Record<string, unknown> = {
@@ -74,18 +75,25 @@ async function callCatalogMcp(toolName: string, args: Record<string, unknown>) {
   // Debug: log the exact args being sent to Catalog MCP
   console.error(`[catalog] ${toolName} args:`, JSON.stringify(redactCatalogLogValue(argsWithMeta)));
 
-  const response = await fetch(CATALOG_MCP_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(CATALOG_MCP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    console.error(`[catalog] ${toolName} fetch failed: duration_ms=${Date.now() - startedAt} error=${e instanceof Error ? e.message : String(e)}`);
+    throw e;
+  }
 
   if (!response.ok) {
     const text = await response.text();
+    console.error(`[catalog] ${toolName} http error: status=${response.status} duration_ms=${Date.now() - startedAt}`);
     throw new Error(`Catalog MCP error (${response.status}): ${text}`);
   }
 
@@ -119,7 +127,7 @@ async function callCatalogMcp(toolName: string, args: Record<string, unknown>) {
   const debugInfo = toolName === 'search_catalog' || toolName === 'lookup_catalog'
     ? `products.length=${Array.isArray(raw?.products) ? raw.products.length : 'N/A'} offers.length=${Array.isArray(raw?.offers) ? raw.offers.length : 'N/A'}`
     : `product.variants.length=${Array.isArray(product?.variants) ? product.variants.length : 'N/A'} product.products.length=${Array.isArray(product?.products) ? product.products.length : 'N/A'}`;
-  console.error(`[catalog] ${toolName} response: ${debugInfo}`);
+  console.error(`[catalog] ${toolName} response: ${debugInfo} duration_ms=${Date.now() - startedAt}`);
 
   return parsed;
 }

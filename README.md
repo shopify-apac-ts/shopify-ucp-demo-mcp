@@ -8,7 +8,7 @@ A Remote MCP server that lets any AI agent (Claude, ChatGPT, etc.) search Shopif
 |---|---|
 | `search_products` | Search hundreds of millions of products across all Shopify merchants by text or image similarity |
 | `lookup_products` | Refresh known Catalog product or variant IDs without running a new search |
-| `get_product_details` | Get full variant details and checkout URLs for a specific product |
+| `get_product_details` | Get variant options, matching offers, and checkout URLs for a specific product |
 | `create_cart` | Create a merchant cart for basket building |
 | `get_cart` | Retrieve an existing merchant cart |
 | `update_cart` | Replace the full cart line-item state |

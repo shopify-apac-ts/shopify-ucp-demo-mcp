@@ -60,6 +60,12 @@ similarity search. When only an image is provided, Catalog searches for visually
 similar products. Continue to pass `context` and `ships_to` so results are
 relevant and shippable for the buyer.
 
+The server rejects placeholder-sized image payloads before calling Catalog. A
+real similarity-search image must decode to at least 512 bytes and match the
+declared MIME type. Catalog calls also time out after 30 seconds by default
+(`CATALOG_MCP_TIMEOUT_MS`) so a bad upstream image request does not leave the
+client waiting indefinitely.
+
 ### Cart layer
 
 The full UCP spec defines a cart resource (`create_cart` / `get_cart` /

@@ -93,6 +93,11 @@ specific constraints such as material, budget, size, or destination. Use
 `image_base64` without `query` only when the buyer asks for a pure visual
 similarity search.
 
+Validate that the client sent the actual image bytes, not a placeholder or
+caption. This sample rejects decoded image payloads smaller than 512 bytes and
+times out Catalog calls after 30 seconds by default (`CATALOG_MCP_TIMEOUT_MS`)
+so the AI client receives a clear tool error instead of waiting indefinitely.
+
 ## 4. Show product ratings to help buyers choose
 
 The `search_catalog` response may include `rating: { value, count }` at both the product level and the per-seller variant level. Surface this in your UI when present so buyers can prioritize highly rated products.

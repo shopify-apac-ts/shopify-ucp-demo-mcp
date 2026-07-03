@@ -2,11 +2,17 @@ import { getBearerToken } from './auth.js';
 import { UCP_AGENT_PROFILE } from './ucp-config.js';
 
 const CATALOG_MCP_URL = 'https://catalog.shopify.com/api/ucp/mcp';
+const DEFAULT_CATALOG_TIMEOUT_MS = 30000;
 
 let requestId = 0;
 
 function nextId() {
   return ++requestId;
+}
+
+function catalogTimeoutMs(): number {
+  const raw = Number.parseInt(process.env.CATALOG_MCP_TIMEOUT_MS ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_CATALOG_TIMEOUT_MS;
 }
 
 function redactCatalogLogValue(value: unknown): unknown {
@@ -85,6 +91,7 @@ async function callCatalogMcp(toolName: string, args: Record<string, unknown>) {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(catalogTimeoutMs()),
     });
   } catch (e) {
     console.error(`[catalog] ${toolName} fetch failed: duration_ms=${Date.now() - startedAt} error=${e instanceof Error ? e.message : String(e)}`);

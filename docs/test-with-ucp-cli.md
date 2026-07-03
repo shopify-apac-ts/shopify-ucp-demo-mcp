@@ -153,7 +153,10 @@ buyer-facing titles, prices, checkout URLs, and Markdown product images when
 Catalog returns image URLs.
 
 For a real call, pass either `image_base64` plus `image_content_type`, or
-`image_url`, not both.
+`image_url`, not both. The sample rejects placeholder-sized image payloads
+before calling Catalog: decoded image bytes must be at least 512 bytes and match
+the declared MIME type. If a client cannot provide the full image bytes, use
+`image_url` instead.
 
 ### 4.4 `catalog get_product` — by product ID
 

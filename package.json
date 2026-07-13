@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:self-test": "tsc --noEmit -p tsconfig.harness.json",
     "typecheck:harness": "tsc --noEmit -p tsconfig.harness.json",
+    "test": "tsx --test tests/catalog-extension.test.ts",
     "self-test": "tsx harness/run-cases.ts",
     "harness": "tsx harness/run-cases.ts"
   },

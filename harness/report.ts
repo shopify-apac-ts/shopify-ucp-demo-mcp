@@ -12,9 +12,12 @@ function formatList(values: string[]): string {
 
 function redactMerchantString(value: string | undefined): string | undefined {
   if (!value) return value;
+  const extensionToken = '__SHOPIFY_GLOBAL_CATALOG_EXTENSION__';
   return value
+    .replaceAll('dev.shopify.catalog.global', extensionToken)
     .replace(/https?:\/\/[^\s|)]+/g, 'https://[redacted-merchant]')
-    .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi, '[redacted-merchant]');
+    .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi, '[redacted-merchant]')
+    .replaceAll(extensionToken, 'dev.shopify.catalog.global');
 }
 
 function redactCaseResult(result: HarnessCaseResult): HarnessCaseResult {
@@ -97,6 +100,12 @@ export function renderMarkdownReport(run: HarnessRunResult): string {
       lines.push(`- Response shape: ${s.responseShape}`);
       lines.push(`- Merchant hosts: ${formatList(s.merchantHosts)}`);
       lines.push(`- Currencies: ${formatList(s.currencies)}`);
+      lines.push(`- Global Catalog extension versions: ${formatList(s.globalCatalogExtension.versions)}`);
+      lines.push(`- Products with extension metadata: ${s.globalCatalogExtension.productsWithMetadata}`);
+      lines.push(`- Variants with extension data: ${s.globalCatalogExtension.variantsWithExtensionData}/${s.globalCatalogExtension.totalVariants}`);
+      lines.push(`- Variants with native checkout eligibility: ${s.globalCatalogExtension.variantsWithNativeCheckoutEligibility}`);
+      lines.push(`- Variants with running-low signal: ${s.globalCatalogExtension.variantsWithRunningLowSignal}`);
+      lines.push(`- Variants with purchase requirements: ${s.globalCatalogExtension.variantsWithRequirements}`);
       lines.push('');
     }
 

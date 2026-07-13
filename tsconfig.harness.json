@@ -4,6 +4,6 @@
     "rootDir": ".",
     "noEmit": true
   },
-  "include": ["src/**/*", "harness/**/*"],
+  "include": ["src/**/*", "harness/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]
 }

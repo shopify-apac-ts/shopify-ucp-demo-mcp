@@ -20,7 +20,7 @@ sequenceDiagram
 
     M->>C: POST /api/ucp/mcp · tools/call: search_catalog<br/>{catalog: {query, context, filters, pagination}}
     C-->>M: {products: [{id, title, options, price_range,<br/>variants[], media[], url}]}
-    M-->>A: Found N products — titles, prices,<br/>merchant-defined options, Base62 UPIDs
+    M-->>A: Concise product Markdown + complete structuredContent<br/>(Global Catalog extension fields preserved)
 
     Note over A,K: 3. Product Detail
 
@@ -28,7 +28,7 @@ sequenceDiagram
     M->>T: (use cached token or refresh)
     M->>C: POST /api/ucp/mcp · tools/call: get_product<br/>{catalog: {id, selected, filters}}
     C-->>M: {product: {id, description, options,<br/>variants: [{checkout_url, seller, price, availability}]}}
-    M-->>A: Variant list with checkout URLs,<br/>prices, sellers, and availability
+    M-->>A: Concise variant Markdown + complete structuredContent<br/>(metadata, eligibility, requirements, inventory signals)
 
     Note over A,K: 4. Checkout — discovery via /.well-known/ucp
 

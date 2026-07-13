@@ -43,6 +43,22 @@ Every outgoing call carries `meta.ucp-agent.profile` (see `UCP_AGENT_PROFILE` be
 Calls that mutate state (`cancel_cart`, `complete_checkout`, `cancel_checkout`) also carry
 `meta.idempotency-key` so retries are safe.
 
+### Global Catalog extension data
+
+`search_products`, `lookup_products`, and `get_product_details` return two
+representations of the same Catalog result:
+
+- `content` contains concise Markdown for buyer-facing chat and mobile clients.
+- `structuredContent` preserves the complete upstream Catalog response,
+  including the `dev.shopify.catalog.global` extension.
+
+Agents can therefore use Shopify-specific fields such as
+`metadata.attributes`, `metadata.top_features`,
+`metadata.unique_selling_points`, `condition`,
+`eligible.native_checkout`, `availability.running_low`, `requires`, and
+seller identity or policy links without displaying the entire raw response to
+the buyer.
+
 ### Product option selection
 
 Shopify product option names are merchant-defined, so `get_product_details`
@@ -120,6 +136,7 @@ JSON and Markdown report with:
 
 - Catalog payloads and response summaries
 - `products[]` vs `variants[]` response-shape detection
+- Global Catalog extension capability and field coverage
 - checkout URL and merchant host coverage
 - `/.well-known/ucp` discovery classification
 - likely issue codes such as `catalog_no_match`,

@@ -18,6 +18,19 @@ export function classifyHarnessResult(input: {
 
   const summary = input.searchSummary;
   if (summary) {
+    const expectations = input.testCase.expectations;
+    if (
+      (expectations?.requireGlobalCatalogExtension &&
+        summary.globalCatalogExtension.versions.length === 0) ||
+      (expectations?.minProductsWithExtensionMetadata !== undefined &&
+        summary.globalCatalogExtension.productsWithMetadata <
+          expectations.minProductsWithExtensionMetadata) ||
+      (expectations?.minVariantsWithExtensionData !== undefined &&
+        summary.globalCatalogExtension.variantsWithExtensionData <
+          expectations.minVariantsWithExtensionData)
+    ) {
+      codes.add('catalog_extension_missing');
+    }
     if (summary.responseShape === 'unknown') {
       codes.add('response_shape_changed');
     }

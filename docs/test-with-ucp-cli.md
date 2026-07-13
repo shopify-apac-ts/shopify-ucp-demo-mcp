@@ -93,7 +93,10 @@ ucp catalog search \
 
 Expected: a list of products. Current responses use `products[]` with
 `variants[].checkout_url`; older responses may use `offers[]` with
-`products[].checkoutUrl`.
+`products[].checkoutUrl`. The demo wrapper keeps this complete response in
+MCP `structuredContent` while also returning concise buyer-facing Markdown.
+The self-test checks the `dev.shopify.catalog.global` capability plus product
+metadata and variant extension-field coverage.
 
 > 💡 `--input-schema` on any subcommand prints the live JSON schema — use
 > it to discover the exact filter keys your version of the spec accepts.

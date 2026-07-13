@@ -12,6 +12,7 @@ export type HarnessIssueCode =
   | 'query_too_weak'
   | 'shipping_filter_too_strict'
   | 'response_shape_changed'
+  | 'catalog_extension_missing'
   | 'merchant_manifest_missing'
   | 'checkout_ucp_unsupported'
   | 'checkout_endpoint_resolution_failed'
@@ -30,6 +31,9 @@ export interface HarnessCase {
     expectedMerchantHosts?: string[];
     expectedTitleTerms?: string[];
     requireProductsOrVariants?: boolean;
+    requireGlobalCatalogExtension?: boolean;
+    minProductsWithExtensionMetadata?: number;
+    minVariantsWithExtensionData?: number;
     requireProductDetails?: boolean;
     minProductDetailOffers?: number;
     requireDiscovery?: boolean;

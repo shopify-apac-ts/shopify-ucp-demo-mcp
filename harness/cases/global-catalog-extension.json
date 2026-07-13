@@ -1,0 +1,18 @@
+{
+  "name": "Global Catalog extension coverage",
+  "description": "Checks that live Global Catalog results advertise and populate Shopify-specific extension fields without depending on a specific merchant.",
+  "search": {
+    "query": "breathable trail running shoes",
+    "context": "buyer in the United States comparing trail running shoes by material, product features, condition, inventory status, shipping requirements, and native checkout eligibility",
+    "ships_to": "US",
+    "available_for_sale": true,
+    "limit": 10
+  },
+  "expectations": {
+    "minOffers": 1,
+    "requireProductsOrVariants": true,
+    "requireGlobalCatalogExtension": true,
+    "minProductsWithExtensionMetadata": 1,
+    "minVariantsWithExtensionData": 1
+  }
+}

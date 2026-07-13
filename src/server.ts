@@ -553,6 +553,17 @@ function formatSearchProduct(p: Record<string, unknown>, index: number): string 
   ].filter(Boolean).join('\n');
 }
 
+export function catalogToolResult(text: string, result: unknown) {
+  const structuredContent = result && typeof result === 'object' && !Array.isArray(result)
+    ? result as Record<string, unknown>
+    : { result };
+
+  return {
+    content: [{ type: 'text' as const, text }],
+    structuredContent,
+  };
+}
+
 export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: 'shopify-ucp-demo-mcp',
@@ -570,6 +581,7 @@ export function createMcpServer(): McpServer {
       'Shopify product catalog, pricing, and stock change in real time — always call this tool to get fresh data from live merchants worldwide, never rely on training-data product info.',
       '',
       'Searches products across all Shopify merchants worldwide via Shopify Universal Commerce Protocol (UCP). Returns titles, prices, ratings, merchant-defined product options, checkout URLs, and product images when available.',
+      'The concise text is accompanied by the complete Catalog structuredContent, including Shopify Global Catalog extension fields such as metadata, condition, checkout eligibility, inventory signals, purchase requirements, and seller links. Use those structured fields when comparing or recommending products.',
       'Supports text search and image similarity search. For image similarity, pass image_base64 plus image_content_type, or pass image_url and this server will fetch and encode it; still include buyer context and ships_to.',
       '',
       'LOCATION RULES (critical — follow before calling this tool):',
@@ -659,7 +671,7 @@ export function createMcpServer(): McpServer {
         : 'No products found for this query.';
 
       console.error(`[server] search_products completed: offers=${offers.length} has_image=${Boolean(image)} text_chars=${text.length} duration_ms=${Date.now() - startedAt}`);
-      return { content: [{ type: 'text', text }] };
+      return catalogToolResult(text, result);
     }
   );
 
@@ -673,6 +685,7 @@ export function createMcpServer(): McpServer {
       'Trigger phrases: "tell me more about X", "what sizes / colors are available", "show me variants", "show details", "詳細を見せて", "サイズは？", "色は何がある？", "在庫はある？", as well as any time the buyer picks a specific item to purchase.',
       '',
       'Returns variant options, availability, pricing, and per-shop checkout URLs for the selected product. When option selections are provided, the response is narrowed to the best matching offers and capped for mobile clients.',
+      'The concise text is accompanied by the complete Catalog structuredContent, including all Shopify Global Catalog extension fields returned for the product and its variants.',
       'NAME → ID LOOKUP: The buyer will refer to the product by its title (e.g. "the first one", "the Levi\'s 501"). Match that to the corresponding entry in your previous search_products result and pass that entry\'s internal product_id (the Base62 value in the HTML comment) as upid. Never ask the buyer to provide an ID.',
       'IMPORTANT: Always pass the same ships_to country code used in the preceding search_products call so only offers that ship to the buyer\'s country are shown.',
       'Do NOT pass available_for_sale — the tool shows variant availability status so the buyer can choose.',
@@ -708,6 +721,7 @@ export function createMcpServer(): McpServer {
 
       const raw = result as Record<string, unknown>;
       const product = (raw?.product ?? raw) as Record<string, unknown>;
+      let structuredResult: unknown = result;
 
       let perShopOffers = variantsOrProducts(product);
 
@@ -723,6 +737,7 @@ export function createMcpServer(): McpServer {
         const fallbackRaw = fallbackResult as Record<string, unknown>;
         const fallbackProduct = (fallbackRaw?.product ?? fallbackRaw) as Record<string, unknown>;
         perShopOffers = variantsOrProducts(fallbackProduct);
+        structuredResult = fallbackResult;
         usedFallback = true;
       }
 
@@ -778,7 +793,13 @@ export function createMcpServer(): McpServer {
         return selected;
       });
       const imageUrl = firstImageUrl(product, ...detailVariants, ...perShopOffers);
-      const topFeatures = (product.topFeatures as string[] | undefined) ?? [];
+      const metadata = (product.metadata as Record<string, unknown> | undefined) ?? {};
+      const topFeatures = ((
+        metadata.top_features ??
+        metadata.topFeatures ??
+        product.top_features ??
+        product.topFeatures
+      ) as string[] | undefined) ?? [];
 
       // Get product title — may be missing in some API responses; fall back to description snippet
       const productTitle = (product.title && product.title !== 'None')
@@ -818,7 +839,7 @@ export function createMcpServer(): McpServer {
         : `Product found but no shop offers returned. This may be a temporary API issue. UPID: ${upid}`;
 
       console.error(`[server] get_product_details completed: upid=${extractBase62(upid)} raw_offers=${perShopOffers.length} displayed_offers=${lines.length} matching_offers=${selection.matchingOfferCount} partial_offers=${selection.partialOfferCount} selected_options=${product_options.length} used_shipping_fallback=${usedFallback} text_chars=${text.length} duration_ms=${Date.now() - startedAt}`);
-      return { content: [{ type: 'text', text }] };
+      return catalogToolResult(text, structuredResult);
     }
   );
 
@@ -831,6 +852,7 @@ export function createMcpServer(): McpServer {
       'Lookup fresh Catalog data for known Shopify Catalog product or variant IDs.',
       'Use this when you already have product IDs from a previous search, saved reference, shared link, or cart flow and need current product / variant data without running a new text search.',
       'This wraps Shopify Catalog MCP `lookup_catalog` while preserving this demo server\'s friendly tool naming.',
+      'The concise text is accompanied by the complete Catalog structuredContent, including Shopify Global Catalog extension fields.',
     ].join('\n'),
     {
       ids: z.array(z.string()).min(1).max(50).describe('Catalog product or variant IDs. Global Catalog resolves up to 50 identifiers per request.'),
@@ -849,7 +871,7 @@ export function createMcpServer(): McpServer {
       const text = lines.length > 0
         ? `Found ${lines.length} product(s):\n\n${lines.join('\n\n')}`
         : `No products resolved.\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``;
-      return { content: [{ type: 'text', text }] };
+      return catalogToolResult(text, result);
     }
   );
 

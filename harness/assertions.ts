@@ -71,6 +71,31 @@ export function assertHarnessCase(
     });
   }
 
+  if (expectations.requireGlobalCatalogExtension) {
+    assertions.push({
+      ok: (searchSummary?.globalCatalogExtension.versions.length ?? 0) > 0,
+      message: 'Catalog advertised the dev.shopify.catalog.global extension',
+    });
+  }
+
+  if (expectations.minProductsWithExtensionMetadata !== undefined) {
+    assertions.push({
+      ok:
+        (searchSummary?.globalCatalogExtension.productsWithMetadata ?? 0) >=
+        expectations.minProductsWithExtensionMetadata,
+      message: `At least ${expectations.minProductsWithExtensionMetadata} product(s) included Shopify extension metadata`,
+    });
+  }
+
+  if (expectations.minVariantsWithExtensionData !== undefined) {
+    assertions.push({
+      ok:
+        (searchSummary?.globalCatalogExtension.variantsWithExtensionData ?? 0) >=
+        expectations.minVariantsWithExtensionData,
+      message: `At least ${expectations.minVariantsWithExtensionData} variant(s) included Shopify extension data`,
+    });
+  }
+
   if (expectations.requireProductDetails) {
     assertions.push({
       ok: Boolean(detailSummary),

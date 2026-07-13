@@ -166,6 +166,22 @@ export interface CatalogSearchSummary {
   merchantHosts: string[];
   productTitles: string[];
   responseShape: 'products' | 'offers' | 'unknown';
+  globalCatalogExtension: CatalogGlobalExtensionSummary;
+}
+
+export interface CatalogGlobalExtensionSummary {
+  versions: string[];
+  productsWithMetadata: number;
+  productsWithAttributes: number;
+  productsWithTopFeatures: number;
+  productsWithUniqueSellingPoints: number;
+  totalVariants: number;
+  variantsWithExtensionData: number;
+  variantsWithCondition: number;
+  variantsWithNativeCheckoutEligibility: number;
+  variantsWithRunningLowSignal: number;
+  variantsWithRequirements: number;
+  variantsWithSellerIdentity: number;
 }
 
 export interface CatalogProductDetailsSummary {
@@ -196,6 +212,28 @@ function currencyFromPrice(value: unknown): string | undefined {
 
 function uniqueSorted(values: Array<string | undefined>): string[] {
   return [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function nonEmptyArray(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function globalCatalogExtensionVersions(raw: Record<string, unknown>): string[] {
+  const ucp = objectValue(raw.ucp);
+  const capabilities = objectValue(ucp.capabilities);
+  const extension = capabilities['dev.shopify.catalog.global'];
+  if (!Array.isArray(extension)) return [];
+
+  return uniqueSorted(extension.map((entry) => {
+    const version = objectValue(entry).version;
+    return typeof version === 'string' ? version : undefined;
+  }));
 }
 
 function gidForCatalogProduct(id: string): string {
@@ -258,6 +296,20 @@ export function summarizeCatalogSearchResult(result: unknown): CatalogSearchSumm
   let offersWithVariants = 0;
   let offersWithCheckoutUrl = 0;
   let offersWithProductPageUrl = 0;
+  const extension: CatalogGlobalExtensionSummary = {
+    versions: raw ? globalCatalogExtensionVersions(raw) : [],
+    productsWithMetadata: 0,
+    productsWithAttributes: 0,
+    productsWithTopFeatures: 0,
+    productsWithUniqueSellingPoints: 0,
+    totalVariants: 0,
+    variantsWithExtensionData: 0,
+    variantsWithCondition: 0,
+    variantsWithNativeCheckoutEligibility: 0,
+    variantsWithRunningLowSignal: 0,
+    variantsWithRequirements: 0,
+    variantsWithSellerIdentity: 0,
+  };
 
   for (const offer of offers) {
     const products = (offer.products as Record<string, unknown>[] | undefined) ?? [];
@@ -272,9 +324,43 @@ export function summarizeCatalogSearchResult(result: unknown): CatalogSearchSumm
     }
 
     for (const child of childOffers) {
+      extension.totalVariants += 1;
+      let hasExtensionData = false;
+      if (nonEmptyArray(child.condition)) {
+        extension.variantsWithCondition += 1;
+        hasExtensionData = true;
+      }
+
+      const eligible = objectValue(child.eligible);
+      if ('native_checkout' in eligible || 'nativeCheckout' in eligible) {
+        extension.variantsWithNativeCheckoutEligibility += 1;
+        hasExtensionData = true;
+      }
+
+      const availability = objectValue(child.availability);
+      if ('running_low' in availability || 'runningLow' in availability) {
+        extension.variantsWithRunningLowSignal += 1;
+        hasExtensionData = true;
+      }
+
+      const requirements = objectValue(child.requires);
+      if (Object.keys(requirements).length > 0) {
+        extension.variantsWithRequirements += 1;
+        hasExtensionData = true;
+      }
+
       currencies.push(currencyFromPrice(child.price));
       const shop = child.shop as Record<string, unknown> | undefined;
       const seller = child.seller as Record<string, unknown> | undefined;
+      if (seller && [seller.id, seller.domain, seller.url].some((value) => typeof value === 'string')) {
+        extension.variantsWithSellerIdentity += 1;
+        hasExtensionData = true;
+      }
+      if (typeof child.checkout_url === 'string' || typeof child.checkoutUrl === 'string') {
+        hasExtensionData = true;
+      }
+      if (hasExtensionData) extension.variantsWithExtensionData += 1;
+
       merchantHosts.push(
         (typeof seller?.domain === 'string' ? seller.domain : undefined) ??
           hostFromUrl(seller?.url) ??
@@ -284,6 +370,19 @@ export function summarizeCatalogSearchResult(result: unknown): CatalogSearchSumm
           hostFromUrl(child.checkout_url)
       );
     }
+
+    const metadata = objectValue(offer.metadata);
+    const hasAttributes = nonEmptyArray(metadata.attributes);
+    const hasTopFeatures = nonEmptyArray(metadata.top_features ?? metadata.topFeatures);
+    const hasUniqueSellingPoints = nonEmptyArray(
+      metadata.unique_selling_points ?? metadata.uniqueSellingPoints
+    );
+    if (hasAttributes || hasTopFeatures || hasUniqueSellingPoints) {
+      extension.productsWithMetadata += 1;
+    }
+    if (hasAttributes) extension.productsWithAttributes += 1;
+    if (hasTopFeatures) extension.productsWithTopFeatures += 1;
+    if (hasUniqueSellingPoints) extension.productsWithUniqueSellingPoints += 1;
 
     const priceRange = (offer.priceRange ?? offer.price_range) as Record<string, Record<string, unknown>> | undefined;
     currencies.push(currencyFromPrice(priceRange?.min));
@@ -301,6 +400,7 @@ export function summarizeCatalogSearchResult(result: unknown): CatalogSearchSumm
       .map((offer) => offer.title)
       .filter((title): title is string => typeof title === 'string'),
     responseShape: Array.isArray(raw?.products) ? 'products' : Array.isArray(raw?.offers) ? 'offers' : 'unknown',
+    globalCatalogExtension: extension,
   };
 }
 

@@ -223,7 +223,34 @@ const response = await fetch(CATALOG_MCP_URL, {
 });
 ```
 
-## 10. Web Search vs UCP Search
+## 10. Preserve complete Catalog data for agent reasoning
+
+Catalog results serve two different audiences. Buyers need a concise,
+readable answer, while agents need the full structured response to compare
+products and choose the correct next action.
+
+Return both MCP result forms instead of flattening the Catalog response into
+text only:
+
+```ts
+return {
+  content: [{ type: 'text', text: conciseBuyerFacingSummary }],
+  structuredContent: completeCatalogResult,
+};
+```
+
+This sample preserves the complete `dev.shopify.catalog.global` response in
+`structuredContent`, including `metadata.attributes`,
+`metadata.top_features`, `metadata.unique_selling_points`, `condition`,
+`eligible.native_checkout`, `availability.running_low`, `requires`, and
+seller links. The text response remains compact for mobile clients.
+
+Do not confuse display reduction with data reduction. Limiting the number of
+search results is useful, but removing fields from products already returned
+can prevent the agent from explaining recommendations, detecting checkout
+eligibility, or respecting purchase prerequisites.
+
+## 11. Web Search vs UCP Search
 
 Without UCP, AI product discovery usually starts with web search or web
 scraping. The agent meets pages that a search engine already crawled, so product
@@ -300,6 +327,7 @@ flowchart LR
 ## References
 
 - [Global Catalog MCP](https://shopify.dev/docs/agents/catalog/global-catalog)
+- [Global Catalog extension](https://shopify.dev/docs/agents/catalog/global-catalog-extension)
 - [Cart MCP](https://shopify.dev/docs/agents/carts-and-checkout/cart-mcp)
 - [Checkout MCP](https://shopify.dev/docs/agents/carts-and-checkout/checkout-mcp)
 - [About Shopify Catalog](https://shopify.dev/docs/agents/catalog)

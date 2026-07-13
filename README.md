@@ -161,6 +161,12 @@ Run one case:
 pnpm run self-test -- --case harness/cases/us-made-denim-to-jp.json
 ```
 
+Run the Global Catalog extension coverage case:
+
+```bash
+pnpm run self-test -- --case harness/cases/global-catalog-extension.json
+```
+
 List cases without making network calls:
 
 ```bash

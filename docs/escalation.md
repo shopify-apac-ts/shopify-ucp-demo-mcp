@@ -40,7 +40,7 @@ flowchart LR
     M -.->|charge| PSP
 ```
 
-**This sample sits between Platform and Merchant.** It is a Remote MCP server that the Platform (an AI agent) connects to, and it speaks UCP to the Merchant (Shopify Catalog + Checkout MCP). The Credential Provider and PSP arms are **not represented** in this sample — buyers always escalate to Shopify-hosted checkout to enter payment.
+**This sample sits between Platform and Merchant.** It is a Remote MCP server that the Platform (an AI agent) connects to, and it speaks UCP to the Merchant (Shopify Catalog + Checkout MCP). The Credential Provider and PSP arms are **not represented** in this sample. Its public `complete_checkout` tool does not accept a payment credential, so the demonstrated purchase path hands the buyer to Shopify-hosted checkout for payment.
 
 Reference: [Google Developers Blog — UCP](https://developers.googleblog.com/under-the-hood-universal-commerce-protocol-ucp/) discusses these actor roles and how AP2 fits in.
 
@@ -52,7 +52,7 @@ flowchart TB
         direction TB
         A1["Buyer talks to AI agent"]
         A2["Address collected via dialogue<br/>(update_checkout)"]
-        A3["Payment credential attached<br/>via Credential Provider / AP2"]
+        A3["Buyer-authorized payment credential<br/>via a supported handler"]
         A4["complete_checkout → Order placed<br/>buyer never leaves chat"]
         A1 --> A2 --> A3 --> A4
     end
@@ -63,7 +63,7 @@ flowchart TB
         B2["Address collected via dialogue<br/>(update_checkout)"]
         B3["status: requires_escalation<br/>continue_url returned"]
         B4["Buyer opens continue_url<br/>(Shopify-hosted checkout)"]
-        B5["complete_checkout → Order placed"]
+        B5["get_checkout → completed<br/>or complete only if ready"]
         B1 --> B2 --> B3 --> B4 --> B5
     end
 
@@ -71,7 +71,10 @@ flowchart TB
     style B fill:#e0f2fe
 ```
 
-**Why mode A is not demoable here**: it requires integrating with a Credential Provider (e.g., Shop Pay account with a saved card, or Google Pay / Apple Pay token exchange via AP2). This sample's `create_checkout` does not supply a payment credential, so the merchant's runtime will route to mode B in practice.
+**Why mode A is not demoable here**: it requires a supported payment handler
+and a buyer-authorized payment credential. This sample's public tools do not
+collect or submit that credential, so its demonstrated checkout path uses mode
+B.
 
 Reference: [Shopify Checkout MCP — status lifecycle](https://shopify.dev/docs/agents/carts-and-checkout/checkout-mcp), [Shopify Engineering: Building UCP](https://shopify.engineering/ucp) (handoff section).
 
@@ -85,7 +88,8 @@ stateDiagram-v2
     incomplete --> incomplete: update_checkout<br/>(still missing data)
     incomplete --> requires_escalation: update_checkout<br/>(escalation needed)
     incomplete --> ready_for_complete: update_checkout<br/>(all info present)
-    requires_escalation --> ready_for_complete: Buyer finishes<br/>at continue_url
+    requires_escalation --> ready_for_complete: Merchant returns control<br/>for agent completion
+    requires_escalation --> completed: Merchant-hosted checkout<br/>places the order
     ready_for_complete --> completed: complete_checkout
     incomplete --> canceled: cancel_checkout
     requires_escalation --> canceled: cancel_checkout
@@ -109,7 +113,7 @@ UCP intentionally splits decision-making across actors. Roughly:
 | Whether an AI channel can discover this merchant's products | Merchant | [Admin → Sales channels → Agentic](https://help.shopify.com/en/manual/online-sales-channels/agentic-storefronts) |
 | Whether direct checkout is enabled per AI channel | Merchant | Same Admin section |
 | Whether a UCP call returns `requires_escalation` | Merchant runtime | Returned in the Checkout MCP response |
-| Whether to redirect to `continue_url` or embed via ECP | Agent / host | [ECP `ec_delegate` URL params](https://shopify.dev/docs/agents/checkout/ecp) |
+| Whether to redirect to `continue_url` or embed via ECP | Agent / host | [ECP `ec_delegate` URL params](https://shopify.dev/docs/agents/carts-and-checkout/ecp) |
 | Final payment authorization, fraud check, fulfillment | Merchant / PSP | Out of the agent's hands once handed off |
 
 **This sample only exercises the Agent column.** Merchant-side configuration (Agentic Storefronts admin), merchant runtime decisions, and PSP-side logic are all out of scope.
@@ -162,16 +166,29 @@ sequenceDiagram
     Note over ShopUI,Checkout: Merchant-internal flow —<br/>this sample is not involved
 
     Buyer->>Agent: "Done"
-    Agent->>Sample: complete_checkout<br/>{checkout_id}
-    Sample->>Checkout: ucp complete_checkout
-    Checkout-->>Sample: {status: completed,<br/>order: {permalink_url}}
-    Sample-->>Agent: Order placed
-    Agent->>Buyer: "Order confirmed: [permalink]"
+    Agent->>Sample: get_checkout<br/>{checkout_id}
+    Sample->>Checkout: ucp get_checkout
+    Checkout-->>Sample: Latest checkout status
+
+    alt status is completed
+        Sample-->>Agent: Order placed + permalink
+        Agent->>Buyer: "Order confirmed: [permalink]"
+    else status is ready_for_complete
+        Sample-->>Agent: Ready for completion
+        Agent->>Sample: complete_checkout<br/>{checkout_id, idempotency_key}
+        Sample->>Checkout: ucp complete_checkout
+        Checkout-->>Sample: {status: completed,<br/>order: {permalink_url}}
+        Sample-->>Agent: Order placed
+        Agent->>Buyer: "Order confirmed: [permalink]"
+    else buyer action is still required
+        Sample-->>Agent: Latest status + continue_url
+        Agent->>Buyer: "More action is required: [continue_url]"
+    end
 ```
 
 Key implementation references:
 
-- **Status-driven dispatch** lives in the AI's tool descriptions, not in code: see the `update_checkout` description in [src/server.ts](../src/server.ts) where the AI is told "if status is `requires_escalation`, show the `continue_url` to the buyer"
+- **Status-driven dispatch** is expressed by the tool descriptions and the status-aware `formatCheckoutResponse` helper in [src/server.ts](../src/server.ts). It tells the agent to show `continue_url` for `requires_escalation`, refresh with `get_checkout` after handoff, and call `complete_checkout` only for `ready_for_complete`.
 - **Fallback path** for non-UCP shops: `src/checkout.ts` resolves the Checkout MCP endpoint via `/.well-known/ucp`. When the manifest returns 404 (or has no `dev.ucp.shopping` MCP transport), `resolveCheckoutMcpUrl` throws `UcpNotSupportedError` — `create_checkout` catches it and tells the AI to use the Catalog MCP's `checkoutUrl` cart permalink instead. See the catch block in [src/server.ts](../src/server.ts) around the `UcpNotSupportedError` instance check.
 - **continue_url decoration** appends `utm_source=ucp_demo_app` and `skip_shop_pay=true` so the buyer lands on the Shopify-hosted checkout with the prefilled address visible (and not on the Shop Pay OTP prompt) — see `decorateContinueUrl` in [src/server.ts](../src/server.ts).
 - **Cart handoff** is supported: `create_cart` can be used for basket-building, and `create_checkout` accepts `cart_id` to convert that cart into a checkout.
@@ -183,7 +200,7 @@ Be honest with viewers about scope:
 
 | Concept | Demoed here? | Why not |
 |---|---|---|
-| UCP agent-only completion (buyer never leaves chat) | ❌ | Requires Credential Provider integration (Shop Pay / Google Pay / Apple Pay via AP2). Out of scope for a server-only MCP sample. |
+| UCP agent-only completion (buyer never leaves chat) | ❌ | Requires a supported payment handler and buyer-authorized credential. The public MCP wrapper does not expose payment input. |
 | ECP — Embedded Checkout Protocol | ❌ | Requires a host app with WebView + JSON-RPC handlers. See [Carts and checkout docs](https://shopify.dev/docs/agents/carts-and-checkout). |
 | `ec_delegate` agent-side delegation | ❌ | Only relevant for ECP-embedded flows. See [Carts and checkout docs](https://shopify.dev/docs/agents/carts-and-checkout). |
 | Merchant Agentic Storefronts configuration | ❌ | Merchant Admin UI concern, not an MCP server concern. See [Agentic Storefronts admin docs](https://help.shopify.com/en/manual/online-sales-channels/agentic-storefronts). |

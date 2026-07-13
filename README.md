@@ -6,7 +6,7 @@ A Remote MCP server that lets any AI agent (Claude, ChatGPT, etc.) search Shopif
 
 | Tool | Description |
 |---|---|
-| `search_products` | Search hundreds of millions of products across all Shopify merchants by text or image similarity |
+| `search_products` | Search Shopify's Global Catalog by text or image similarity, optionally scoped by a saved Catalog |
 | `lookup_products` | Refresh known Catalog product or variant IDs without running a new search |
 | `get_product_details` | Get variant options, matching offers, and checkout URLs for a specific product |
 | `create_cart` | Create a merchant cart for basket building |
@@ -16,7 +16,7 @@ A Remote MCP server that lets any AI agent (Claude, ChatGPT, etc.) search Shopif
 | `create_checkout` | Start a checkout session on a merchant's store |
 | `get_checkout` | Retrieve an existing checkout state |
 | `update_checkout` | Add buyer info, shipping address, select shipping method |
-| `complete_checkout` | Place the order when checkout status is `ready_for_complete` |
+| `complete_checkout` | Place the order when checkout is ready and already has usable payment state |
 | `cancel_checkout` | Cancel an active checkout session |
 
 ### UCP-spec tool mapping
@@ -39,9 +39,9 @@ canonical Universal Commerce Protocol tools defined by Shopify. The mapping is:
 | `complete_checkout` | [`complete_checkout`](https://shopify.dev/docs/agents/carts-and-checkout/checkout-mcp#complete_checkout) | Checkout MCP — discovered via `/.well-known/ucp` |
 | `cancel_checkout` | [`cancel_checkout`](https://shopify.dev/docs/agents/carts-and-checkout/checkout-mcp#cancel_checkout) | Checkout MCP — discovered via `/.well-known/ucp` |
 
-Every outgoing call carries `meta.ucp-agent.profile` (see `UCP_AGENT_PROFILE` below).
-Calls that mutate state (`cancel_cart`, `complete_checkout`, `cancel_checkout`) also carry
-`meta.idempotency-key` so retries are safe.
+Every outgoing call carries `meta.ucp-agent.profile`.
+Operations that require idempotency (`cancel_cart`, `complete_checkout`, and
+`cancel_checkout`) also carry `meta.idempotency-key` so retries are safe.
 
 ### Global Catalog extension data
 
@@ -66,8 +66,8 @@ accepts a generic `options` array for selections such as `Color`, `Style`,
 `Material`, `カラー`, or any other Catalog-returned option name. The older
 `color` and `size` arguments remain as convenience shortcuts, but the server
 does not hardcode translated option-name aliases. If option names do not match,
-the response formatter falls back to exact option-value matching and shows the
-closest offers instead of guessing.
+the response formatter falls back to normalized option-value matching and
+shows the closest offers instead of guessing.
 
 ### Image similarity search
 
@@ -210,23 +210,6 @@ pnpm run dev
 
 The MCP endpoint is available at `http://localhost:3000/mcp`.
 
-### 4. Deploy to Render
-
-1. Push to GitHub (triggers auto-deploy via Render)
-2. Set the **Build Command** in Render dashboard to:
-   ```
-   pnpm install --prod=false && pnpm run build
-   ```
-3. Set **Start Command** to:
-   ```
-   node dist/index.js
-   ```
-4. Set environment variables in Render dashboard:
-   - `SHOPIFY_CLIENT_ID`
-   - `SHOPIFY_CLIENT_SECRET`
-   - `UCP_AGENT_PROFILE` *(optional)* — defaults to Shopify's published reference profile JSON. Override only if you self-host a custom UCP profile document.
-   - `SHOPIFY_CATALOG_ID` *(optional)* — saved catalog slug from Dev Dashboard
-
 ## Connect your AI to this MCP server
 
 Add the following to your AI's MCP configuration:
@@ -277,83 +260,7 @@ claude mcp add shopify-ucp --transport http https://your-app-name.onrender.com/m
 ## Demo
 
 See the [Wiki](../../wiki) for a video walkthrough of Claude mobile using this
-server as a custom connector. The demo starts with this prompt:
-
-> **中年男性向けの夏のシャツをUCPで探して**
-
-The video then continues with follow-up prompts for product images, item
-selection, variant selection, shipping details, and checkout handoff:
-
-```text
-商品画像
-リネンシャツ
-ブラックM
-名前は山田太郎、メールアドレスは test@example.com 配送先は東京都のWeWork アイスバーグで。
-1F, 6丁目-12-18 神宮前 渋谷区 東京都 150-0001
-氏名は山田太郎、電話番号は、09012345678
-```
-
-## Example conversation
-
-> **User:** Find me a spring parka available in Tokyo.
->
-> **AI:** *(detects "Tokyo" → `ships_to: "JP"`, calls `search_products`)*
-> Here are 5 parkas that ship to Japan...
->
-> **User:** Tell me more about the first one.
->
-> **AI:** *(calls `get_product_details` with `ships_to: "JP"`)*
-> Available sizes: S / M / L / XL. Checkout: [url]
->
-> **User:** I'll take size M.
->
-> **AI:** *(calls `create_checkout` with the variant ID)*
-> Checkout started. What's your shipping address?
->
-> **User:** 〒100-0001 東京都千代田区...
->
-> **AI:** *(calls `update_checkout` with address)*
-> Ready to complete. Please proceed to payment: [continue_url]
-
-### More sample prompts
-
-These prompts go beyond search — each one expects the AI to pick a product, pre-fill saved buyer info, and hand back a payment-ready `continue_url` in a single turn.
-
-| Scenario | Prompt (EN) | Prompt (JP) |
-|---|---|---|
-| US-made → ship to JP | American-made selvedge denim jeans (W32 L32), around $200, that can ship to Tokyo. Pick one, use my usual address and email, and get it ready so I just need to pay. | 東京に発送できる、アメリカ製セルビッジデニム (W32 L32) を $200 前後で 1 本選んで。いつもの住所と連絡先で、あとは支払うだけの状態にして。 |
-| JP-style → ship within US | A Japanese-style cotton sashiko jacket in size M, under $150, that ships within the US. Pick one and set it up to ship to my California address — I just want to pay and be done. | アメリカ国内で買える、日本風のサシコ・ジャケット (M, $150 以下) を 1 着。カリフォルニアの住所に送るかたちで、あとはお支払いするだけにしておいて。 |
-| Gift to a US friend | I want to send a traditional Japanese ceramic mug (under $40) to my friend in Brooklyn as a gift. Pick one from a US shop, ship to [friend's address], and take me straight to the payment page. | ブルックリンの友人へのギフトに、日本の伝統的な陶器マグ ($40 以下) を 1 つ贈りたい。US 国内発送のショップから選んで、配送先は [friend's address]、そのまま支払いに進めるところまでお願い。 |
-| Ready-to-buy | Order a 12oz bag of single-origin coffee roasted in Maine, around $20, shipped to my usual US address. One pick is fine — take me to payment. | メイン州焙煎のシングルオリジンコーヒー (12oz, $20 前後) を、いつもの US 住所宛に 1 袋注文したい。1 件で OK、そのままお支払いまで連れて行って。 |
-| Re-order | Reorder the same Patagonia Better Sweater Fleece I bought before (Men's, Black, size M). Ship to my home — I just want to pay. | 前に買った Patagonia Better Sweater Fleece (Men's, Black, size M) をもう 1 着。自宅宛で、あとは支払うだけの状態にしておいて。 |
-
-### Location handling
-
-The AI agent automatically extracts the shipping country from the user's query:
-
-| Mentioned | `ships_to` |
-|---|---|
-| Tokyo, 東京, Japan, 日本 | `JP` |
-| New York, US, USA | `US` |
-| London, UK, England | `GB` |
-
-If no location can be inferred, the AI asks: *"What country are you shopping from?"* before searching.
-
-## Checkout flow
-
-The checkout follows a status-driven workflow as defined by UCP:
-
-```
-create_checkout
-    ↓
-status: incomplete → update_checkout (add missing info)
-    ↓
-status: requires_escalation → show continue_url to buyer (payment UI)
-    ↓
-status: ready_for_complete → complete_checkout
-    ↓
-status: completed ✓
-```
+server as a custom connector.
 
 ## Development
 

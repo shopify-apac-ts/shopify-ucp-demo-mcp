@@ -34,6 +34,7 @@ sequenceDiagram
 
     opt Basket-building flow
         A->>M: tools/call: create_cart<br/>{shop_domain, line_items, context}
+        Note over M,K: Before the first Cart / Checkout call,<br/>resolve and cache the merchant MCP endpoint<br/>from /.well-known/ucp
         M->>K: tools/call: create_cart<br/>{cart: {line_items, context}}
         K-->>M: {id, line_items, totals}
         M-->>A: Cart ID + totals
@@ -43,12 +44,12 @@ sequenceDiagram
     A->>M: tools/call: create_checkout<br/>{shop_domain, cart_id}<br/>or {currency, line_items}
 
     Note over M: Resolve canonical Checkout MCP<br/>endpoint via UCP discovery<br/>(cached after first hit)
-    M->>K: GET https://{shop}/.well-known/ucp
+    M->>K: GET https://{shop}/.well-known/ucp<br/>(unless endpoint is already cached)
 
     alt UCP Checkout enabled (manifest present)
         K-->>M: 200 · {ucp.services["dev.ucp.shopping"]<br/>[{transport: "mcp", endpoint}]}
 
-        Note over M,K: All Checkout MCP calls forward buyer IP<br/>via Shopify-Buyer-IP header (required) + body signal<br/>checkout.signals["dev.ucp.buyer_ip"] (spec-compliance)
+        Note over M,K: All Cart / Checkout MCP calls forward buyer IP<br/>via Shopify-Buyer-IP. Writable create, update,<br/>and complete bodies also carry UCP signals when available.
         M->>K: POST {endpoint} · tools/call: create_checkout<br/>{meta: {ucp-agent: {profile}}, cart_id}<br/>or {checkout: {currency, line_items, signals}}
         K-->>M: {id, status: incomplete, continue_url}
         M-->>A: Status: incomplete · checkout_id<br/>(continue_url decorated with<br/>utm_source + skip_shop_pay=true)
@@ -62,12 +63,23 @@ sequenceDiagram
         K-->>M: {status: requires_escalation,<br/>continue_url, messages[]}
         M-->>A: Hand off to buyer via continue_url<br/>(decorated · payment input in browser)
 
-        Note over A,K: Buyer completes payment in merchant UI
+        Note over A,K: Buyer completes the merchant-hosted step
 
-        A->>M: tools/call: complete_checkout<br/>{checkout_id, idempotency_key}
-        M->>K: tools/call: complete_checkout<br/>{id, meta: {idempotency-key}}
-        K-->>M: {status: completed, order: {id, permalink_url}}
-        M-->>A: Order placed — order ID + permalink<br/>(utm_source appended)
+        A->>M: tools/call: get_checkout<br/>{checkout_id}
+        M->>K: tools/call: get_checkout {id}
+        K-->>M: Latest checkout status
+
+        alt Hosted checkout already completed the order
+            M-->>A: status: completed · order permalink
+        else status is ready_for_complete
+            M-->>A: status: ready_for_complete
+            A->>M: tools/call: complete_checkout<br/>{checkout_id, idempotency_key}
+            M->>K: tools/call: complete_checkout<br/>{id, meta: {idempotency-key}}
+            K-->>M: {status: completed, order: {id, permalink_url}}
+            M-->>A: Order placed — order ID + permalink<br/>(utm_source appended)
+        else More buyer action is required
+            M-->>A: Latest status + decorated continue_url
+        end
 
     else UCP not enabled (no /.well-known/ucp manifest)
         K-->>M: HTTP 404
@@ -102,7 +114,7 @@ If the manifest returns **HTTP 404** (or is missing the `dev.ucp.shopping` MCP t
 
 ### Buyer IP propagation
 
-Shopify's Checkout MCP requires the `Shopify-Buyer-IP` HTTP header with a valid IPv4 or IPv6 address when calling tools that mutate cart state under a trusted authentication method — omitting it returns HTTP 422 with `Missing required buyer IP header.` (observed empirically). This server forwards the IP via the `Shopify-Buyer-IP` header **and** the UCP-spec body signal `checkout.signals["dev.ucp.buyer_ip"]` (the header is what Shopify currently enforces on; the body signal is kept for spec compliance and forward compatibility). The buyer IP comes from `req.ip` (Express `trust proxy` set so Render's `X-Forwarded-For` is honored) and is propagated through the request via `AsyncLocalStorage` in `src/request-context.ts`. In this Remote MCP topology the captured IP is the AI provider's, not the buyer's true client IP; production deployments serving real buyer traffic should pass the buyer's true IP.
+Shopify's Checkout MCP requires the `Shopify-Buyer-IP` HTTP header with a valid IPv4 or IPv6 address when calling tools that mutate cart state under a trusted authentication method — omitting it returns HTTP 422 with `Missing required buyer IP header.` (observed empirically). This server forwards the header on Cart / Checkout MCP calls. When the operation has a writable cart or checkout body, the server also includes the UCP signal `signals["dev.ucp.buyer_ip"]`; ID-only get and cancel operations have no body in which to carry that signal. The buyer IP comes from `req.ip` (Express `trust proxy` set so Render's `X-Forwarded-For` is honored) and is propagated through the request via `AsyncLocalStorage` in `src/request-context.ts`. In this Remote MCP topology the captured IP is the AI provider's, not the buyer's true client IP; production deployments serving real buyer traffic should pass the buyer's true IP.
 
 ### continue_url decoration
 
@@ -122,7 +134,14 @@ status: incomplete       → update_checkout (add missing buyer/address info)
     ↓
 status: requires_escalation → show continue_url to buyer (payment UI)
     ↓
+get_checkout → status: completed, or
 status: ready_for_complete  → complete_checkout
     ↓
 status: completed ✓
 ```
+
+The public `complete_checkout` wrapper does not accept a payment credential.
+The `ready_for_complete` branch therefore applies only when the upstream
+checkout already retains usable, buyer-authorized payment state. In the normal
+hosted handoff shown above, the merchant checkout can complete the order in the
+browser and `get_checkout` reports `completed`.

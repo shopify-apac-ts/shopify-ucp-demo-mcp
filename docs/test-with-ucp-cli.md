@@ -34,7 +34,7 @@ when you need local merchant debugging.
 ## 1. Install
 
 ```bash
-npm install -g @shopify/ucp-cli   # or: pnpm add -g @shopify/ucp-cli
+pnpm add --global @shopify/ucp-cli
 ucp --version
 ```
 
@@ -185,7 +185,7 @@ merchant-defined, so the wrapper does not hardcode translated option-name
 aliases. In the raw UCP CLI example above, replace `Color` and `Size` with the
 exact option names returned by Catalog for the product you are testing.
 
-### 4.4 `discover` — what does this merchant actually offer?
+### 4.5 `discover` — what does this merchant actually offer?
 
 ```bash
 ucp discover --business "$UCP_BUSINESS"
@@ -193,16 +193,16 @@ ucp discover --business "$UCP_BUSINESS"
 
 Returns the merchant's `/.well-known/ucp` services. If the response is
 empty for `dev.ucp.shopping`, the shop hasn't enabled Checkout MCP — the
-sections below will fail with `AuthenticationFailed` until they do.
+Cart and Checkout commands below are unavailable for that shop. The exact CLI
+error depends on the discovered profile and authentication tier.
 
 ## 5. Cart and checkout tests
 
 Pick a shop from the catalog response above (the `shop.onlineStoreUrl`
 field). If the merchant hasn't enabled Checkout MCP, the standard
 `checkoutUrl` from `get_product` still works as a regular hosted checkout —
-this server's
-[`formatCheckoutResponse`](../src/server.ts) falls back to surfacing that
-URL.
+this server's `create_checkout` wrapper catches `UcpNotSupportedError` and
+instructs the agent to reuse that URL from `get_product_details`.
 
 ### 5.1 `cart create` — optional basket step
 
@@ -249,8 +249,9 @@ include the complete `line_items` list.
 > empirically; the CLI sets the header from your local connection
 > automatically, and this sample plumbs the IP from the incoming `/mcp`
 > request via [`request-context.ts`](../src/request-context.ts). UCP's
-> spec also defines `checkout.signals["dev.ucp.buyer_ip"]` in the JSON
-> body, so the sample sends both for forward compatibility. In a Remote
+> spec also defines `signals["dev.ucp.buyer_ip"]` in writable cart and checkout
+> bodies. The sample always forwards the header and adds the body signal when
+> that operation has such a body. In a Remote
 > MCP topology the captured IP is the AI provider's, not the buyer's
 > true client IP — agentic commerce shifts buyer-IP collection to the
 > AI host. Production deployments serving real buyer traffic should pass
@@ -258,7 +259,8 @@ include the complete `line_items` list.
 > to discuss partner-program options.
 
 ```bash
-ucp checkout create --business "$UCP_BUSINESS" --cart-id "$CART_ID"
+ucp checkout create --business "$UCP_BUSINESS" \
+  --set-string /cart_id="$CART_ID"
 ```
 
 For a direct buy-now flow, skip cart and pass line items directly:
@@ -271,8 +273,9 @@ ucp checkout create --business "$UCP_BUSINESS" \
   }'
 ```
 
-Expected status: `incomplete` (no buyer info or shipping address yet). The
-response contains a `checkout.id` — save it for the next call.
+The initial status depends on the inherited cart and merchant requirements; it
+is commonly `incomplete` or `requires_escalation`. The response contains a
+checkout `id` — save it for the next call.
 
 ```bash
 CHECKOUT_ID="..."   # from the create response
@@ -329,15 +332,17 @@ export UCP_ON_ESCALATION='jq -r .url | xargs open'   # macOS
 ucp checkout get "$CHECKOUT_ID" --business "$UCP_BUSINESS"
 ```
 
-Expected: the full checkout payload from 5.2, including any
+Expected: the full checkout payload from 5.4, including any
 `shipping_method_handle` options the merchant offers. Use this to pick a
 shipping method for a follow-up `checkout update`.
 
 ### 5.7 `checkout complete` — only when status is `ready_for_complete`
 
-Once the buyer has finished the merchant-hosted step (or once enough fields
-are filled to bypass escalation), status flips to `ready_for_complete`.
-The CLI generates an idempotency key by default:
+After the buyer finishes the merchant-hosted step, run `checkout get` first.
+The hosted checkout might already have completed the order. Call
+`checkout complete` only when the latest status is `ready_for_complete` and a
+payment credential has been authorized. The CLI generates an idempotency key
+by default:
 
 ```bash
 ucp checkout complete "$CHECKOUT_ID" --business "$UCP_BUSINESS"
@@ -345,8 +350,11 @@ ucp checkout complete "$CHECKOUT_ID" --business "$UCP_BUSINESS"
 
 Expected status: `completed`, with an `order.id` and a `permalink_url`
 receipt. This sample's
-[`complete_checkout`](../src/server.ts) wrapper accepts the same shape
-(taking an explicit `idempotency_key` arg for caller-supplied retries).
+[`complete_checkout`](../src/server.ts) wrapper requires an explicit
+`idempotency_key`, but its public tool schema does not expose a payment
+credential. It is therefore not a replacement for the CLI's payment-handler
+flow; use it only when the upstream checkout already reports
+`ready_for_complete` with usable payment state.
 
 ### 5.8 `checkout cancel` — idempotency required
 
@@ -354,9 +362,10 @@ receipt. This sample's
 ucp checkout cancel "$CHECKOUT_ID" --business "$UCP_BUSINESS"
 ```
 
-Expected status: `canceled`. Calling cancel twice with the same internal
-idempotency key returns the same payload — this is the property the demo's
-[`cancel_checkout`](../src/server.ts) wrapper enforces.
+Expected status: `canceled`. The CLI creates the idempotency key for its
+request. This sample's [`cancel_checkout`](../src/server.ts) wrapper instead
+requires the caller to provide the key explicitly so the same value can be
+reused for a retry.
 
 ## 6. Cross-check against this server
 
@@ -372,18 +381,23 @@ curl -s -X POST http://localhost:3000/mcp \
 # Catalog: CLI hitting Shopify directly, raw JSON
 ucp catalog search \
   --set /query='American jeans' \
-  --set /context='buyer in JP' \
+  --set /context/intent='buyer in JP [ships_to: JP] [ships_from: US]' \
   --set /context/address_country=JP \
+  --set /filters/ships_to/country=JP \
+  --set '/filters/ships_from/0/country=US' \
+  --set /filters/available=true \
+  --set /pagination/limit=3 \
   --format json
 ```
 
-The Shopify-side payload should match byte-for-byte except for the
-wrapping this server does (rendering offers as Markdown bullets vs the
-CLI's `--format json` dump).
+Compare the requests semantically, not byte-for-byte. This wrapper enriches
+`context.intent`, defaults `available` to `true`, caps pagination, adds the
+configured `saved_catalog_slug`, and injects its agent profile. The CLI adds
+its own profile metadata and renders a different response envelope.
 
 `--dry-run` on any UCP command prints the payload the CLI would send
 without actually sending it — useful for diffing against the
-`[checkout] ... body:` lines this server logs.
+`[catalog] ... args:` or `[checkout] ... body:` lines this server logs.
 
 ## 7. What this sample doesn't exercise
 

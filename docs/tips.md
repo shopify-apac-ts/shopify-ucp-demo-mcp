@@ -118,7 +118,7 @@ The `search_catalog` response may include `rating: { value, count }` at both the
 
 This sample server displays ratings inline in search results:
 ```
-1. **Levi's 501 Original Jeans** — 89.00 USD  ⭐ 4.8 (312)
+1. **Levi's 501 Original Jeans** — 89.00 USD  rating 4.8 (312)
 ```
 
 ## 5. Use pagination limit and minor-unit price filters
@@ -129,6 +129,14 @@ Amounts are minor currency units: `15000` means $150.00 USD.
 
 If you need fresh variant-level detail for a specific product, call
 `get_product` with the product ID and selected option labels.
+
+This sample also supports a saved Catalog default. When
+`SHOPIFY_CATALOG_ID` is set, `search_products` sends its value as
+`catalog.saved_catalog_slug`; the saved Catalog's inputs and overrides take
+precedence over runtime search filters. When it is unset, searches use the
+default Global Catalog across eligible merchants. Despite the environment
+variable name, the value is a saved Catalog slug from the Dev Dashboard, not a
+Shopify GID.
 
 ## 6. Discover Checkout MCP via /.well-known/ucp and fall back gracefully
 

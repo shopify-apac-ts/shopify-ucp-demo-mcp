@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>UCP概要</title>
+    <link rel="icon" href="data:," />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -48,7 +49,7 @@
         color: var(--ink);
       }
 
-      body:has(#comparison:target) main > .page:not(#comparison) {
+      body:has(.page:target) main > .page:not(:target) {
         display: none;
       }
 
@@ -756,6 +757,7 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="../overview-sections.css" />
   </head>
   <body>
     <main>
@@ -915,7 +917,11 @@
               <strong>要点:</strong> UCPは、商品情報、チェックアウト方針、決済の信頼を
               マーチャント側に保ったまま、AIとの購買会話を反復型のコマース体験にします。
             </div>
-            <a href="../index.html">English version</a>
+            <nav class="footer-links" aria-label="概要ナビゲーション">
+              <a href="#comparison">Catalog比較</a>
+              <a href="#actors">4つの主体</a>
+              <a href="../index.html">English version</a>
+            </nav>
           </footer>
         </section>
       </section>
@@ -1044,7 +1050,355 @@
               <strong>要点:</strong> 競争は、人間に見つけてもらうことから、
               AIに選ばれ、信頼できるチェックアウトまで導くことへ移ります。
             </div>
-            <a href="../index.html#comparison">English version</a>
+            <nav class="footer-links" aria-label="概要ナビゲーション">
+              <a href="#journey">UCPジャーニー</a>
+              <a href="#actors">4つの主体</a>
+              <a href="../index.html#comparison">English version</a>
+            </nav>
+          </footer>
+        </section>
+      </section>
+
+      <section class="page" id="actors">
+        <section class="slide" aria-labelledby="actors-title">
+          <header>
+            <p class="eyebrow">UCPの責任分担モデル</p>
+            <h1 id="actors-title">UCPでは4つの主体が購買の信頼を分担する</h1>
+            <p class="subtitle">
+              UCPは、1つのシステムにすべてを任せずにコマースを連携します。
+              Platformが会話を進め、Merchantが販売を担い、決済資格情報と
+              決済処理は別々の信頼境界に保たれます。
+            </p>
+          </header>
+
+          <section class="main-grid" aria-label="UCPの4つの主体">
+            <div class="actor-map">
+              <article class="actor-pair protocol">
+                <div class="ucp-actor">
+                  <div class="actor-symbol" aria-hidden="true">P</div>
+                  <h2>Platform</h2>
+                  <p>
+                    購入者の意図を理解し、toolを呼び、候補を提示して購買ジャーニーを
+                    調整するAIホストまたはAgentクライアントです。
+                  </p>
+                </div>
+                <div class="protocol-link" aria-label="双方向のUCPプロトコル">
+                  <span class="protocol-arrow" aria-hidden="true">↔</span>
+                  <strong>UCP protocol</strong>
+                </div>
+                <div class="ucp-actor">
+                  <div class="actor-symbol" aria-hidden="true">M</div>
+                  <h2>Merchant</h2>
+                  <p>
+                    商品情報、チェックアウト方針、フルフィルメント、リスク判断、
+                    生成された注文に責任を持つ販売者です。
+                  </p>
+                </div>
+              </article>
+
+              <article class="actor-pair payment">
+                <div class="ucp-actor">
+                  <div class="actor-symbol" aria-hidden="true">CP</div>
+                  <h2>Credential Provider</h2>
+                  <p>
+                    Shop Pay、Google Pay、Apple Payなど、購入者が承認した
+                    決済資格情報を発行するウォレットです。
+                  </p>
+                </div>
+                <div class="protocol-link" aria-label="双方向の決済トークン交換">
+                  <span class="protocol-arrow" aria-hidden="true">↔</span>
+                  <strong>AP2 / payment token</strong>
+                </div>
+                <div class="ucp-actor">
+                  <div class="actor-symbol" aria-hidden="true">PSP</div>
+                  <h2>Payment Service Provider</h2>
+                  <p>
+                    Shopify PaymentsやStripeなど、Merchantのために取引を
+                    オーソリし、売上を精算する決済処理事業者です。
+                  </p>
+                </div>
+              </article>
+
+              <div class="cross-actions" aria-label="主体をまたぐ決済アクション">
+                <article class="cross-action">
+                  <div class="route-mark" aria-hidden="true">P→CP</div>
+                  <div>
+                    <strong>Platformが資格情報を要求</strong>
+                    <span>Agentが再利用可能な決済秘密情報を受け取る前に、購入者がウォレットで承認します。</span>
+                  </div>
+                </article>
+                <article class="cross-action">
+                  <div class="route-mark" aria-hidden="true">M→PSP</div>
+                  <div>
+                    <strong>Merchantが決済を要求</strong>
+                    <span>オーソリ、不正検知、売上確定、精算はMerchantとPSPの信頼境界に残ります。</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <footer>
+            <div>
+              <strong>このサンプル:</strong> Shopify MCPをラップし、Platformと
+              Merchantの間をつなぎます。Credential ProviderとPSPは実装しません。
+              <a class="inline-link" href="../escalation.md">対象範囲の詳細を見る。</a>
+            </div>
+            <nav class="footer-links" aria-label="主体図のナビゲーション">
+              <a href="#lifecycle">Checkoutの状態</a>
+              <a href="#faq">FAQ</a>
+              <a href="../index.html#actors">English version</a>
+            </nav>
+          </footer>
+        </section>
+      </section>
+
+      <section class="page" id="lifecycle">
+        <section class="slide" aria-labelledby="lifecycle-title">
+          <header>
+            <p class="eyebrow">Checkout status state machine</p>
+            <h1 id="lifecycle-title">statusが次に行動する主体を決める</h1>
+            <p class="subtitle">
+              Checkout MCPのすべての応答にはstatusがあります。Agentは修正可能な
+              情報を更新し、escalationが必要なら購入者を<code>continue_url</code>へ
+              引き継ぎ、Checkoutが準備完了の場合だけ完了処理を行います。
+            </p>
+          </header>
+
+          <section class="main-grid" aria-label="UCP Checkoutの状態遷移">
+            <div class="diagram-scroll">
+              <svg class="state-machine" viewBox="0 0 1200 520" role="img" aria-labelledby="state-title state-description">
+                <title id="state-title">UCP Checkout status state machine</title>
+                <desc id="state-description">incomplete、requires escalation、ready for complete、completed、canceled間の状態遷移。</desc>
+                <defs>
+                  <marker id="state-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+                    <path d="M0,0 L8,4 L0,8 Z" fill="#536259"></path>
+                  </marker>
+                </defs>
+
+                <circle cx="28" cy="235" r="12" fill="#004c3f"></circle>
+                <path class="transition" d="M42 235 L80 235"></path>
+                <text class="edge-label" x="88" y="165">create_checkout</text>
+
+                <rect class="state-node" x="80" y="180" width="250" height="110" rx="12"></rect>
+                <text class="state-code" x="205" y="230" text-anchor="middle">incomplete</text>
+                <text class="state-note" x="205" y="258" text-anchor="middle">購入者または配送情報が不足</text>
+
+                <rect class="state-node escalation" x="470" y="70" width="260" height="110" rx="12"></rect>
+                <text class="state-code" x="600" y="120" text-anchor="middle">requires_escalation</text>
+                <text class="state-note" x="600" y="148" text-anchor="middle">購入者が信頼されたMerchant UIへ移動</text>
+
+                <rect class="state-node ready" x="470" y="320" width="260" height="110" rx="12"></rect>
+                <text class="state-code" x="600" y="370" text-anchor="middle">ready_for_complete</text>
+                <text class="state-note" x="600" y="398" text-anchor="middle">対象Agentが注文を確定可能</text>
+
+                <rect class="state-node terminal" x="870" y="195" width="250" height="110" rx="12"></rect>
+                <text class="state-code" x="995" y="245" text-anchor="middle">completed</text>
+                <text class="state-note" x="995" y="273" text-anchor="middle">注文作成済み</text>
+
+                <rect class="state-node canceled" x="80" y="390" width="250" height="90" rx="12"></rect>
+                <text class="state-code" x="205" y="430" text-anchor="middle">canceled</text>
+                <text class="state-note" x="205" y="456" text-anchor="middle">Checkout終了</text>
+
+                <path class="transition" d="M80 205 C25 205 25 105 205 105 C385 105 385 205 330 205"></path>
+                <text class="edge-label" x="205" y="88" text-anchor="middle">update_checkout · 情報不足が継続</text>
+
+                <path class="transition" d="M330 205 C390 205 410 125 470 125"></path>
+                <text class="edge-label" x="408" y="150" text-anchor="middle">escalationが必要</text>
+
+                <path class="transition" d="M330 265 C390 265 410 375 470 375"></path>
+                <text class="edge-label" x="404" y="310" text-anchor="middle">必要情報が揃う</text>
+
+                <path class="transition dashed" d="M600 180 L600 320"></path>
+                <text class="edge-label" x="610" y="255">Merchantから制御が戻る</text>
+
+                <path class="transition" d="M730 125 C800 125 820 220 870 220"></path>
+                <text class="edge-label" x="795" y="164" text-anchor="middle">Hosted checkout</text>
+
+                <path class="transition" d="M730 375 C800 375 820 280 870 280"></path>
+                <text class="edge-label" x="795" y="344" text-anchor="middle">complete_checkout</text>
+
+                <path class="transition" d="M205 290 L205 390"></path>
+                <text class="edge-label" x="215" y="345">cancel_checkout</text>
+
+                <path class="transition dashed" d="M470 150 C390 150 390 435 330 435"></path>
+                <text class="edge-label" x="380" y="482" text-anchor="middle">cancel_checkout</text>
+              </svg>
+            </div>
+
+            <div class="state-legend">
+              <article>
+                <strong>General access</strong>
+                <span>多くのAgent統合では、<code>requires_escalation</code>と<code>continue_url</code>が通常の引き継ぎ経路です。</span>
+              </article>
+              <article>
+                <strong>Agentによる完了</strong>
+                <span>現在の状態が<code>ready_for_complete</code>で、使用可能な決済状態がある場合だけ<code>complete_checkout</code>を呼びます。</span>
+              </article>
+              <article>
+                <strong>Terminal state</strong>
+                <span><code>completed</code>と<code>canceled</code>でセッションは終了します。購入者を引き継いだ後は<code>get_checkout</code>で再確認します。</span>
+              </article>
+            </div>
+          </section>
+
+          <footer>
+            <div>
+              <strong>ルール:</strong> tool名だけから次のアクションを推測せず、返された
+              statusとmessagesを読みます。<a class="inline-link" href="../escalation.md#status-state-machine">詳しい状態モデルを見る。</a>
+            </div>
+            <nav class="footer-links" aria-label="状態遷移のナビゲーション">
+              <a href="#actors">4つの主体</a>
+              <a href="#faq">FAQ</a>
+              <a href="../index.html#lifecycle">English version</a>
+            </nav>
+          </footer>
+        </section>
+      </section>
+
+      <section class="page" id="faq">
+        <section class="slide" aria-labelledby="faq-title">
+          <header>
+            <p class="eyebrow">実装FAQ</p>
+            <h1 id="faq-title">6つの違いを知れば実装の誤解を防げる</h1>
+            <p class="subtitle">
+              各項目を開くと、実装境界の要点を確認できます。保守される正本、詳しい説明、
+              Shopifyドキュメントへのリンクは
+              <a class="inline-link" href="../tips.md#faq--common-shopify-agentic-commerce-misconceptions">tips.md</a>にあります。
+            </p>
+          </header>
+
+          <section class="main-grid" aria-label="Shopify Agentic Commerceのよくある質問">
+            <div class="faq-grid">
+              <details class="faq-item">
+                <summary>Global Catalogのmetadataは標準UCPで、Agentが動的に変更できますか？</summary>
+                <div class="faq-answer">
+                  <p>いいえ。<code>dev.shopify.catalog.global</code>は、ML推論metadataなどを標準UCP Catalogへ加えるShopify extensionです。</p>
+                  <p>公開インターフェースにmetadataの動的overrideはありません。Saved Catalogは結果を絞り込みますが、<code>attributes</code>や<code>top_features</code>などを書き換えません。</p>
+                </div>
+              </details>
+
+              <details class="faq-item">
+                <summary>Shop Pay WalletとUCP Shop Pay handlerは同じ実装ですか？</summary>
+                <div class="faq-answer">
+                  <p>いいえ。Shop Pay WalletはコマースのcheckoutへUIとpayment request sessionを加えます。UCP handlerはAgentの<code>client_id</code>と1回限りのShop Tokenを使うdelegated paymentです。</p>
+                  <p>どちらかを実装しても、もう一方が設定されたり利用可能になったりはしません。</p>
+                </div>
+              </details>
+
+              <details class="faq-item">
+                <summary>ECPはRemote MCP serverだけで実装できますか？</summary>
+                <div class="faq-answer">
+                  <p>いいえ。Agent hostが<code>continue_url</code>をWebViewで開き、JSON-RPCメッセージを交換し、委譲されたnative UIを実装する必要があります。</p>
+                  <p>MCP serverはURLを返せますが、任意のAI clientにこれらの機能を追加できません。</p>
+                </div>
+              </details>
+
+              <details class="faq-item">
+                <summary>独自Catalogを作り、Catalog IDを渡す必要がありますか？</summary>
+                <div class="faq-answer">
+                  <p>いいえ。Global Catalogはデフォルトで対象となるShopify Merchantを検索します。Saved Catalogは繰り返し使う範囲やfilterのための任意機能です。</p>
+                  <p>使う場合はShopify GIDではなく<code>saved_catalog_slug</code>を渡します。API credentialやproduct IDとは別の識別子です。</p>
+                </div>
+              </details>
+
+              <details class="faq-item">
+                <summary>Catalogの検索結果や商品画像をcacheできますか？</summary>
+                <div class="faq-answer">
+                  <p>いいえ。ShopifyはCatalog検索結果をcacheしないよう定め、商品画像は関連Merchantの商品情報とともにリアルタイム表示する必要があります。</p>
+                  <p>product dataを再利用しないtokenやendpointのcacheは別です。</p>
+                </div>
+              </details>
+
+              <details class="faq-item">
+                <summary>単一MerchantならGlobalとStorefrontのどちらを使いますか？</summary>
+                <div class="faq-answer">
+                  <p>既知の1つのMerchantにはStorefront Catalogを使います。複数Merchantの商品発見、比較、推薦にはGlobal Catalogを使います。</p>
+                  <p>どちらもUCP Catalogを実装しますが、範囲、認証、Shopify extensionのfieldが異なります。</p>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <footer>
+            <div>
+              <strong>最新情報:</strong> Shopifyのsurface変更時は、詳しい正本である
+              <a class="inline-link" href="../tips.md#faq--common-shopify-agentic-commerce-misconceptions">tips.md</a>を参照してください。
+            </div>
+            <nav class="footer-links" aria-label="FAQナビゲーション">
+              <a href="#lifecycle">Checkoutの状態</a>
+              <a href="#resources">技術資料</a>
+              <a href="../index.html#faq">English version</a>
+            </nav>
+          </footer>
+        </section>
+      </section>
+
+      <section class="page" id="resources">
+        <section class="slide" aria-labelledby="resources-title">
+          <header>
+            <p class="eyebrow">技術ドキュメント</p>
+            <h1 id="resources-title">次の疑問に合う技術資料を選ぶ</h1>
+            <p class="subtitle">
+              4つの資料が、責任分担の概念からwire levelのテストまで、
+              このrepositoryの実装を段階的に説明します。リンク先の技術資料は英語です。
+            </p>
+          </header>
+
+          <section class="main-grid" aria-label="Repositoryの技術ドキュメント">
+            <div class="resource-grid">
+              <article class="resource-card">
+                <div class="resource-label">概念と境界</div>
+                <h2><a href="../escalation.md">escalation.md</a></h2>
+                <p>
+                  UCPの4つの主体、Checkout escalation、status machine、Hosted handoff、
+                  ECPの境界、このRemote MCP sampleが実装する範囲としない範囲を説明します。
+                </p>
+                <div class="resource-best-for">用途: Architecture、責任主体、決済、ECPの疑問</div>
+              </article>
+
+              <article class="resource-card">
+                <div class="resource-label">End-to-end wire flow</div>
+                <h2><a href="../sequence-diagram.md">sequence-diagram.md</a></h2>
+                <p>
+                  認証、Catalog検索、cart/checkout call、<code>/.well-known/ucp</code> discovery、
+                  buyer IP、update sanitization、escalation、注文完了を時系列で追います。
+                </p>
+                <div class="resource-best-for">用途: Request、payload、status、fallbackの確認</div>
+              </article>
+
+              <article class="resource-card">
+                <div class="resource-label">実装ガイダンス</div>
+                <h2><a href="../tips.md">tips.md</a></h2>
+                <p>
+                  Catalogの検索品質、画像検索、currency、tokenとendpoint、完全なstructured
+                  response、cache rule、このページに表示したFAQをまとめています。
+                </p>
+                <div class="resource-best-for">用途: 設計判断と実装ミスの回避</div>
+              </article>
+
+              <article class="resource-card">
+                <div class="resource-label">検証とdebug</div>
+                <h2><a href="../test-with-ucp-cli.md">test-with-ucp-cli.md</a></h2>
+                <p>
+                  Shopify公式の<code>@shopify/ucp-cli</code>とrepositoryのself-testを使い、
+                  live schema、標準tool、wrapperとupstreamの問題を切り分ける方法を説明します。
+                </p>
+                <div class="resource-best-for">用途: Setup確認、regression test、protocol debug</div>
+              </article>
+            </div>
+          </section>
+
+          <footer>
+            <div>
+              <strong>疑問から選ぶ:</strong> 概念 → escalation、実行フロー → sequence、
+              実装判断 → tips、live検証 → UCP CLI。
+            </div>
+            <nav class="footer-links" aria-label="技術資料ナビゲーション">
+              <a href="#journey">UCPジャーニー</a>
+              <a href="#faq">FAQ</a>
+              <a href="../index.html#resources">English version</a>
+            </nav>
           </footer>
         </section>
       </section>

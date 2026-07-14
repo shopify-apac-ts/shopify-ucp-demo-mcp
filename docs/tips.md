@@ -340,3 +340,86 @@ flowchart LR
 - [Checkout MCP](https://shopify.dev/docs/agents/carts-and-checkout/checkout-mcp)
 - [About Shopify Catalog](https://shopify.dev/docs/agents/catalog)
 - [Universal Commerce Protocol](https://ucp.dev)
+
+## FAQ — Common Shopify Agentic Commerce misconceptions
+
+### Are Global Catalog `metadata` fields part of standard UCP, and can an agent change them dynamically?
+
+No. [`dev.shopify.catalog.global`](https://shopify.dev/docs/agents/catalog/global-catalog-extension)
+is a Shopify extension to the base UCP Catalog capability. It adds
+Shopify-specific filters and response fields, including ML-inferred metadata.
+Individual inferred fields might be absent and can vary in accuracy depending
+on the available product data.
+
+The public Global Catalog interface does not currently expose a request field
+or extension hook for an agent to write or dynamically override returned values
+such as `metadata.attributes`, `metadata.top_features`, or
+`metadata.unique_selling_points`. A Saved Catalog can constrain searches using
+saved inputs and overrides, but it does not rewrite those metadata values.
+
+### Are Shop Pay Wallet and the UCP Shop Pay payment handler the same integration?
+
+No. They are separate Shop Pay integration surfaces:
+
+- [Shop Pay Wallet](https://shopify.dev/docs/api/commerce-components/pay) adds
+  Shop Pay frontend components and payment-request sessions to a commerce
+  platform's existing checkout. It requires a dedicated Shop Pay Wallet store
+  rather than an existing Shopify store, and has its own frontend, backend,
+  order-reconciliation, and Shopify Payments requirements.
+- The [Shop Pay payment handler](https://shopify.dev/docs/agents/carts-and-checkout/shop-pay-handler)
+  is a UCP delegated-payment flow. An agent registers for a `client_id`, obtains
+  a single-use, time-limited, checkout-scoped Shop Token, and submits that token
+  as a payment credential to the merchant.
+
+Implementing Shop Pay Wallet does not register an agent for the UCP handler or
+make its Shop Tokens available, and implementing the UCP handler does not add
+the Shop Pay Wallet UI to a checkout.
+
+### Can ECP be implemented by a Remote MCP server alone?
+
+No. The [Embedded Checkout Protocol (ECP)](https://shopify.dev/docs/agents/carts-and-checkout/ecp)
+is an integration between the checkout page and the agent's host application.
+The host must load `continue_url` in a web view, exchange JSON-RPC 2.0 messages,
+and implement any delegated native UI for actions such as address or payment
+selection.
+
+A Remote MCP server can obtain and return `continue_url`, but it cannot add a
+web view or ECP message handlers to an arbitrary AI client. ECP therefore
+requires support or code changes in the agent platform or host application.
+See [escalation.md](escalation.md) for how this sample handles checkout without
+ECP.
+
+### Do I have to create my own Catalog and pass a Catalog ID to use Global Catalog?
+
+No. By default, Global Catalog searches products from eligible merchants across
+Shopify. A [Saved Catalog](https://shopify.dev/docs/agents/catalog) is optional
+and is useful when the agent repeatedly applies the same source scope or
+filters.
+
+If a Saved Catalog is used, Catalog operations receive its
+`saved_catalog_slug` rather than a Shopify GID. Its saved inputs and overrides
+take precedence over runtime search filters. In this sample,
+`SHOPIFY_CATALOG_ID` is the historical environment-variable name, but its value
+must be that slug. The Dev Dashboard client credentials used by this sample and
+the product or variant IDs returned by Catalog are separate identifiers.
+
+### Can an agent cache Catalog search results or product images?
+
+No. Shopify's [Catalog usage guidelines](https://shopify.dev/docs/agents/catalog)
+say not to cache search results because price, availability, presentation, and
+merchant preferences can change. Product images must be rendered in real time
+in connection with the related merchant listing rather than downloaded and
+stored on the agent's server.
+
+Caching an authentication token until expiry or caching a discovered UCP
+endpoint is different: those optimizations do not preserve or replay Catalog
+product data. Refresh product details before the buyer acts on an older result.
+
+### Should a single-merchant agent use Global Catalog or Storefront Catalog?
+
+Use [Storefront Catalog MCP](https://shopify.dev/docs/agents/catalog/storefront-catalog)
+when the buyer's intent is scoped to one known merchant, such as a storefront
+shopping assistant. Use [Global Catalog MCP](https://shopify.dev/docs/agents/catalog/global-catalog)
+for cross-merchant discovery, comparison shopping, and recommendations not tied
+to one store. Both implement the UCP Catalog capability, but they differ in
+scope, authentication, and Shopify extension fields.

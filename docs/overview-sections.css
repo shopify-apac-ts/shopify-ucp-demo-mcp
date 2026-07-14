@@ -347,6 +347,16 @@ code {
   border-top-color: var(--green-dark);
 }
 
+.resource-card.featured {
+  grid-column: 1 / -1;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto;
+  align-items: center;
+  gap: 18px;
+  border-top-color: var(--lime);
+  background: linear-gradient(90deg, #f8fff1, rgba(255, 255, 255, 0.94));
+}
+
 .resource-label {
   color: var(--muted);
   font-size: 11px;
@@ -405,6 +415,13 @@ code {
   .faq-grid,
   .resource-grid {
     grid-template-columns: 1fr;
+  }
+
+  .resource-card.featured {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 9px;
   }
 
   .ucp-actor {

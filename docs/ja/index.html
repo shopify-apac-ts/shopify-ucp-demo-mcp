@@ -1340,13 +1340,23 @@
             <p class="eyebrow">技術ドキュメント</p>
             <h1 id="resources-title">次の疑問に合う技術資料を選ぶ</h1>
             <p class="subtitle">
-              4つの資料が、責任分担の概念からwire levelのテストまで、
-              このrepositoryの実装を段階的に説明します。リンク先の技術資料は英語です。
+              まずREADMEで全体を把握し、4つの専門資料で責任分担の概念から
+              wire levelのテストまで掘り下げます。リンク先の技術資料は英語です。
             </p>
           </header>
 
           <section class="main-grid" aria-label="Repositoryの技術ドキュメント">
             <div class="resource-grid">
+              <article class="resource-card featured">
+                <div class="resource-label">Project entry point</div>
+                <h2><a href="https://github.com/shopify-apac-ts/shopify-ucp-demo-mcp/blob/main/README.md">README.md</a></h2>
+                <p>
+                  Project概要、setup、toolとUCPの対応、architecture、source fileへの参照、
+                  Wikiにあるdemo動画へのリンクを案内します。
+                </p>
+                <div class="resource-best-for">用途: 最初の確認、source、setup、demo動画の検索</div>
+              </article>
+
               <article class="resource-card">
                 <div class="resource-label">概念と境界</div>
                 <h2><a href="https://github.com/shopify-apac-ts/shopify-ucp-demo-mcp/blob/main/docs/escalation.md">escalation.md</a></h2>
@@ -1392,7 +1402,7 @@
           <footer>
             <div>
               <strong>疑問から選ぶ:</strong> 概念 → escalation、実行フロー → sequence、
-              実装判断 → tips、live検証 → UCP CLI。
+              project・source・demo → README、実装判断 → tips、live検証 → UCP CLI。
             </div>
             <nav class="footer-links" aria-label="技術資料ナビゲーション">
               <a href="#journey">UCPジャーニー</a>
